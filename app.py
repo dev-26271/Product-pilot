@@ -30,6 +30,11 @@ def load_custom_css():
                 padding-bottom: 3.5rem !important;
             }
 
+            /* Force flex parent to center children horizontally (e.g. when sidebar toggles) */
+            [data-testid="stMain"] {
+                align-items: center !important;
+            }
+
             /* Sidebar Refinements */
             [data-testid="stSidebar"] {
                 background-color: #111111 !important;
