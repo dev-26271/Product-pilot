@@ -679,7 +679,7 @@ def main():
         # Center the Primary Action CTA button (scaled 30% wider)
         col_left, col_mid, col_right = st.columns([1.2, 2.6, 1.2])
         with col_mid:
-            if st.button("Create Blueprint →", type="primary"):
+            if st.button("Create Blueprint →", type="primary", use_container_width=True):
                 if idea.strip():
                     simulate_new_project_generation(idea, industry, product_type, audience, deliverable, include_risk)
                     st.rerun()
