@@ -14,14 +14,15 @@ if 'projects' not in st.session_state:
     st.session_state['projects'] = {
         "Healthcare AI": {
             "name": "Healthcare AI",
-            "idea": "An AI healthcare platform that helps doctors monitor diabetic patients through wearable devices and personalized recommendations.",
+            "metadata": "Updated 2h ago",
+            "idea": "Build a healthcare platform where patients can consult doctors online, manage prescriptions, schedule appointments, and receive AI-powered health recommendations.",
             "industry": "Healthcare",
             "product_type": "Mobile Application",
             "audience": "B2C",
             "deliverables": {
                 "Product Requirements Document (PRD)": {
                     "content": {
-                        "🎯 Problem Statement": "Patients with chronic conditions like diabetes lack real-time continuous feedback from clinical teams, causing delayed response times during glycemic events.",
+                        "🎯 Problem Statement": "Patients with chronic conditions like diabetes lack real-time continuous feedback from clinical teams, causing delayed response rates during glycemic events.",
                         "📈 Business Goals": "- Reduce critical diabetic response intervals by 65% within initial testing.\n- Establish active connections with 1,000+ board-certified physicians in the first cycle.\n- Achieve patient satisfaction score (CSAT) of 92% or higher.",
                         "👥 User Personas": "**Primary: Dr. Sarah**\nRequires clean telemetry history visualizers and automated threshold event logging.\n\n**Secondary: Patient David**\nRequires a lightweight mobile telemetry reporter syncing securely with passive wearable APIs.",
                         "✨ Features": "1. **Wearable Telemetry Sync:** Continuous glucose data integration API.\n2. **Emergency Threshold Trigger:** Direct notification relays to clinical coordinators.\n3. **Clinical Intakes Portal:** Consolidated telemetry reports with export capabilities."
@@ -43,6 +44,7 @@ if 'projects' not in st.session_state:
         },
         "Food Delivery Platform": {
             "name": "Food Delivery Platform",
+            "metadata": "Updated 1d ago",
             "idea": "A hyper-local food delivery marketplace optimized for eco-friendly drone shipping and zero-waste packaging.",
             "industry": "Retail",
             "product_type": "Marketplace",
@@ -58,6 +60,7 @@ if 'projects' not in st.session_state:
         },
         "CRM SaaS": {
             "name": "CRM SaaS",
+            "metadata": "Draft",
             "idea": "A privacy-first CRM SaaS designed for security-conscious enterprise teams with local-first syncing and end-to-end encryption.",
             "industry": "Finance",
             "product_type": "SaaS Platform",
@@ -66,6 +69,7 @@ if 'projects' not in st.session_state:
         },
         "Student Assistant": {
             "name": "Student Assistant",
+            "metadata": "Draft",
             "idea": "An offline-first study companion utilizing localized LLMs for private research, summarizing, and flashcard generation.",
             "industry": "Education",
             "product_type": "Productivity Tool",
@@ -74,6 +78,10 @@ if 'projects' not in st.session_state:
         }
     }
     st.session_state['active_project_id'] = None # "New Project" mode by default
+
+# Track canvas text in session state to allow chip-fill interaction
+if 'idea_input' not in st.session_state:
+    st.session_state['idea_input'] = ""
 
 def load_custom_css():
     """Injects custom CSS to style the app as an enterprise product workspace."""
@@ -99,14 +107,25 @@ def load_custom_css():
             /* Force flex parent to center children horizontally (centered layout preservation) */
             [data-testid="stMain"] {
                 align-items: center !important;
+                transition: all 0.25s ease-in-out !important;
             }
 
-            /* Sidebar Customization */
+            /* Sidebar Refinements & Correct Collapse Behaviour */
             [data-testid="stSidebar"] {
                 background-color: #111111 !important;
                 border-right: 1px solid #2A2A2A !important;
-                min-width: 240px !important;
-                max-width: 240px !important;
+                transition: min-width 0.25s, max-width 0.25s, width 0.25s !important;
+            }
+            
+            section[data-testid="stSidebar"][aria-expanded="true"] {
+                min-width: 260px !important;
+                max-width: 260px !important;
+            }
+            
+            section[data-testid="stSidebar"][aria-expanded="false"] {
+                min-width: 0px !important;
+                max-width: 0px !important;
+                width: 0px !important;
             }
             
             .sidebar-title {
@@ -129,13 +148,13 @@ def load_custom_css():
                 font-weight: 700;
             }
 
-            /* Customizing Sidebar Buttons to look like flat menu lists */
+            /* Customizing Sidebar Buttons to look like flat menu lists with metadata support */
             div[data-testid="stSidebar"] div.stButton > button {
                 background-color: transparent !important;
                 border: 1px solid transparent !important;
                 color: #9E9E9E !important;
                 text-align: left !important;
-                padding: 0.45rem 0.75rem !important;
+                padding: 0.5rem 0.75rem !important;
                 font-size: 0.9rem !important;
                 font-weight: 500 !important;
                 border-radius: 6px !important;
@@ -144,36 +163,40 @@ def load_custom_css():
                 justify-content: flex-start;
                 align-items: center;
                 transition: all 0.15s ease;
+                white-space: pre-line !important;
+                line-height: 1.35 !important;
             }
+            
             div[data-testid="stSidebar"] div.stButton > button:hover {
                 background-color: #171717 !important;
                 color: #F5F5F5 !important;
                 border-color: #2A2A2A !important;
             }
+            
             div[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
                 background-color: #171717 !important;
                 border: 1px solid #2A2A2A !important;
                 color: #F5F5F5 !important;
             }
 
-            /* Workspace Header typography */
-            .logo-title {
-                font-size: 4.5rem;
-                font-weight: 800;
-                color: #F5F5F5;
-                margin-bottom: 0.15rem;
-                letter-spacing: -0.04em;
-                line-height: 1.05;
-            }
-
-            .section-badge {
-                font-size: 0.85rem;
+            /* Workspace Header / Hero Section Refinements */
+            .hero-badge {
+                font-size: 0.8rem;
                 text-transform: uppercase;
-                letter-spacing: 0.12em;
+                letter-spacing: 0.15em;
                 color: #4F8CFF;
                 font-weight: 700;
                 margin-bottom: 0.5rem;
-                margin-top: 1rem;
+                display: inline-block;
+            }
+
+            .logo-title {
+                font-size: 4.5rem; /* ~72px */
+                font-weight: 800;
+                color: #F5F5F5;
+                margin-bottom: 0.25rem;
+                letter-spacing: -0.04em;
+                line-height: 1.05;
             }
 
             .tagline {
@@ -202,6 +225,14 @@ def load_custom_css():
                 box-shadow: 0 0 0 1px #4F8CFF !important;
             }
 
+            /* Canvas label formatting */
+            .stTextArea label {
+                font-size: 1rem !important;
+                font-weight: 600 !important;
+                color: #F5F5F5 !important;
+                margin-bottom: 0.5rem !important;
+            }
+
             /* Project Configuration Panel (Expander) */
             div[data-testid="stExpander"] {
                 background-color: transparent !important;
@@ -212,13 +243,13 @@ def load_custom_css():
 
             div[data-testid="stExpander"] summary {
                 font-weight: 600 !important;
-                color: #9E9E9E !important;
+                color: #F5F5F5 !important;
                 font-size: 0.95rem !important;
                 padding: 0.75rem 1.25rem !important;
             }
 
             div[data-testid="stExpander"] summary:hover {
-                color: #F5F5F5 !important;
+                background-color: #111111 !important;
             }
 
             /* Configuration Inputs */
@@ -242,7 +273,7 @@ def load_custom_css():
                 font-size: 0.9rem !important;
             }
 
-            /* Action Buttons (Flat Blue) */
+            /* Primary Action Button (Create Blueprint) with Arrow Slide Animation */
             div.stButton > button[kind="primary"] {
                 background-color: #4F8CFF !important;
                 color: #FFFFFF !important;
@@ -251,7 +282,7 @@ def load_custom_css():
                 padding: 0.75rem 2rem !important;
                 font-size: 1.05rem !important;
                 font-weight: 600 !important;
-                transition: all 0.2s ease !important;
+                transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
                 box-shadow: none !important;
                 width: 100% !important;
             }
@@ -260,6 +291,37 @@ def load_custom_css():
                 background-color: #3b74e6 !important;
                 border-color: #3b74e6 !important;
                 transform: translateY(-1px);
+                padding-left: 2.25rem !important;
+                padding-right: 1.75rem !important;
+            }
+
+            /* Suggestion Chips styling */
+            .chip-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                margin-top: 0.75rem;
+                margin-bottom: 2rem;
+            }
+
+            /* Select all buttons inside example columns representing chips */
+            div.chip-col div.stButton > button {
+                background-color: #111111 !important;
+                border: 1px solid #2A2A2A !important;
+                color: #9E9E9E !important;
+                font-size: 0.8rem !important;
+                padding: 0.35rem 0.75rem !important;
+                border-radius: 16px !important;
+                text-align: center !important;
+                font-weight: 500 !important;
+                width: 100% !important;
+                transition: all 0.15s ease !important;
+            }
+
+            div.chip-col div.stButton > button:hover {
+                border-color: #4F8CFF !important;
+                color: #F5F5F5 !important;
+                background-color: #171717 !important;
             }
 
             /* Empty State */
@@ -403,15 +465,18 @@ def render_sidebar():
         # New Project Action
         if st.button("＋ New Project", key="new_proj_btn", use_container_width=True, type="secondary"):
             st.session_state['active_project_id'] = None
+            st.session_state['idea_input'] = ""
             st.rerun()
             
         # Projects Section
         st.markdown("<div class='sidebar-section-header'>Projects</div>", unsafe_allow_html=True)
         for proj_name in st.session_state['projects'].keys():
+            proj = st.session_state['projects'][proj_name]
             is_active = st.session_state['active_project_id'] == proj_name
-            # Render standard buttons styled by CSS to look like custom list items
+            # Multi-line format button with name & metadata status
+            button_label = f"📁 {proj_name}\n{proj['metadata']}"
             if st.button(
-                f"📁 {proj_name}", 
+                button_label, 
                 key=f"proj_{proj_name}", 
                 use_container_width=True, 
                 type="primary" if is_active else "secondary"
@@ -425,10 +490,10 @@ def render_sidebar():
         st.button("📚 Templates", key="templates_btn", use_container_width=True)
 
 def render_header():
-    """Renders the top branding header."""
+    """Renders the top branding header with updated visual hierarchy."""
     st.markdown("""
         <div style="text-align: center; margin-top: 1.5rem; margin-bottom: 2.5rem;">
-            <div class="section-badge">AI Product Strategy Workspace</div>
+            <div class="hero-badge">AI Product Management Workspace</div>
             <h1 class="logo-title">ProductPilot</h1>
             <p class="tagline">Transform rough ideas into production-ready product documentation.</p>
         </div>
@@ -507,6 +572,7 @@ def simulate_new_project_generation(idea, industry, product_type, audience, deli
         # Add to state database
         st.session_state['projects'][proj_name] = {
             "name": proj_name,
+            "metadata": "Draft",
             "idea": idea,
             "industry": industry,
             "product_type": product_type,
@@ -530,18 +596,47 @@ def main():
         # ---- MODE A: NEW PROJECT FLOW ----
         render_header()
         
+        # Input Section Label & Custom Writing Canvas
         idea = st.text_area(
-            "Product Idea",
-            placeholder="What are we building today?\n\nExample: Build an AI healthcare platform that helps doctors monitor diabetic patients through wearable devices and personalized recommendations.",
-            height=130,
-            label_visibility="collapsed"
+            "Describe your product idea",
+            value=st.session_state['idea_input'],
+            placeholder="Example:\nBuild a healthcare platform where patients can consult doctors online, manage prescriptions, schedule appointments, and receive AI-powered health recommendations.",
+            height=130
         )
         
         char_count = len(idea)
         st.markdown(f"<div style='text-align: right; color: #6B7280; font-size: 0.8rem; margin-top: -0.65rem; margin-bottom: 1.25rem;'>{char_count} characters</div>", unsafe_allow_html=True)
         
+        # Suggestion Chips / Example Projects
+        st.markdown("<div style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 0.25rem;'>Example Projects:</div>", unsafe_allow_html=True)
+        
+        # Suggestion Chip Button grid
+        chip_cols = st.columns(6)
+        chips = ["Healthcare AI", "Food Delivery", "AI Tutor", "Inventory Sync", "CRM SaaS", "Smart Farm"]
+        prompts = {
+            "Healthcare AI": "Build a healthcare platform where patients can consult doctors online, manage prescriptions, schedule appointments, and receive AI-powered health recommendations.",
+            "Food Delivery": "A hyper-local food delivery marketplace optimized for eco-friendly drone shipping and zero-waste packaging.",
+            "AI Tutor": "An AI-powered tutoring application that adaptively teaches high school mathematics through interactive storytelling.",
+            "Inventory Sync": "An automated inventory management suite for warehouses utilizing real-time sensor streams and automated supply reordering.",
+            "CRM SaaS": "A privacy-first CRM SaaS designed for security-conscious enterprise teams with local-first syncing and end-to-end encryption.",
+            "Smart Farm": "An IoT-enabled smart agriculture workspace that monitors soil quality, schedules automated irrigation, and predicts harvest cycles."
+        }
+        
+        for idx, chip_name in enumerate(chips):
+            with chip_cols[idx]:
+                # Custom styled chips inside stMain container
+                st.markdown("<div class='chip-col'>", unsafe_allow_html=True)
+                if st.button(chip_name, key=f"chip_{chip_name}"):
+                    st.session_state['idea_input'] = prompts[chip_name]
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+
         # Project Configuration Panel
         with st.expander("Project Configuration", expanded=False):
+            st.markdown("<div style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1rem; margin-top: -0.5rem;'>Configure how ProductPilot should generate documentation.</div>", unsafe_allow_html=True)
+            
             col1, col2, col3 = st.columns(3)
             with col1:
                 industry = st.selectbox(
@@ -562,7 +657,7 @@ def main():
             col4, col5 = st.columns([1, 1])
             with col4:
                 deliverable = st.selectbox(
-                    "Target Deliverable",
+                    "Deliverable",
                     options=[
                         "Product Requirements Document (PRD)",
                         "Business Requirements Document (BRD)",
@@ -571,8 +666,8 @@ def main():
                         "User Stories",
                         "Sprint Backlog",
                         "Jira Tasks",
-                        "Executive Summary",
-                        "Product Roadmap"
+                        "Product Roadmap",
+                        "Executive Summary"
                     ]
                 )
             with col5:
@@ -581,7 +676,8 @@ def main():
                 
         st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
         
-        col_left, col_mid, col_right = st.columns([1.5, 2, 1.5])
+        # Center the Primary Action CTA button (scaled 30% wider)
+        col_left, col_mid, col_right = st.columns([1.2, 2.6, 1.2])
         with col_mid:
             if st.button("Create Blueprint →", type="primary"):
                 if idea.strip():
