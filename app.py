@@ -229,7 +229,7 @@ def load_custom_css():
 def render_sidebar():
     """Renders the minimal, product-focused sidebar navigation."""
     with st.sidebar:
-        st.markdown("<div class="sidebar-title">ProductPilot</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sidebar-title'>ProductPilot</div>", unsafe_allow_html=True)
         st.markdown("""
             <div class="sidebar-nav">
                 <div class="sidebar-nav-item active">New PRD</div>
