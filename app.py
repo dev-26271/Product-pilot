@@ -23,6 +23,7 @@ def load_custom_css():
             /* Customizing Main Content Max-Width (1250px) and padding */
             .block-container {
                 max-width: 1250px !important;
+                margin: 0 auto !important;
                 padding-left: 4rem !important;
                 padding-right: 4rem !important;
                 padding-top: 3.5rem !important;
