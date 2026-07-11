@@ -193,22 +193,22 @@ def main():
     with col1:
         industry = st.selectbox(
             "Industry",
-            options=["SaaS", "FinTech", "HealthTech", "EdTech", "E-commerce", "Other"]
+            options=["Healthcare", "Finance", "Education", "Retail", "Logistics", "Travel", "Real Estate", "HR", "Legal", "Entertainment", "Government", "Other"]
         )
     with col2:
-        project_type = st.selectbox(
-            "Project Type",
-            options=["SaaS", "Marketplace", "AI Tool", "Enterprise Software", "Mobile Application", "API Service", "Healthcare Platform", "Other"]
+        product_type = st.selectbox(
+            "Product Type",
+            options=["SaaS Platform", "Mobile App", "AI Assistant", "Marketplace", "Dashboard", "Internal Tool", "API Platform", "Enterprise Software", "CRM", "Productivity Tool"]
         )
     with col3:
         audience = st.selectbox(
             "Audience",
-            options=["B2B", "B2C", "Internal", "Enterprise"]
+            options=["B2B", "B2C", "Enterprise", "Internal", "Government"]
         )
     with col4:
-        detail_level = st.selectbox(
-            "PRD Detail Level",
-            options=["High-Level", "Standard", "In-Depth"],
+        prd_depth = st.selectbox(
+            "PRD Depth",
+            options=["Basic", "Standard", "Comprehensive"],
             index=1
         )
         
