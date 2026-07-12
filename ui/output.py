@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 from typing import Dict, Any
+from backend.agents.workspace_editor import update_workspace
 
 def render_progress_panel(step: int, deliverable_name: str = "Product Requirements Document (PRD)") -> None:
     """Renders progress states when compilation workflow executes."""
@@ -140,3 +141,28 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                     if st.button(f"Generate {tab_name} →", key=f"gen_{tab_name}_{project['name']}", type="primary"):
                         st.session_state['generating_tab'] = map_name
                         st.rerun()
+
+    # --- AI Workspace Editor Section ---
+    st.markdown("<hr style='border-top: 1px solid #2A2A2A; margin: 3rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>⚡ AI Workspace Editor</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.25rem;'>Provide refinement instructions to edit features, personas, or roadmap phases globally across the workspace.</p>", unsafe_allow_html=True)
+    
+    edit_instruction = st.text_area(
+        "Refinement Instructions",
+        placeholder="Example:\nAdd a feature for push notifications for scheduled doctor visits, and ensure it is prioritized as High in Phase 1.",
+        key=f"edit_inst_{project['name']}",
+        height=100
+    )
+    
+    if st.button("Apply Changes", type="primary", key=f"apply_{project['name']}"):
+        if edit_instruction.strip():
+            with st.spinner("AI Workspace Editor applying updates..."):
+                try:
+                    updated_project = update_workspace(project, edit_instruction)
+                    st.session_state['projects'][project['name']] = updated_project
+                    st.success("Workspace updated successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to apply changes: {e}")
+        else:
+            st.warning("Please provide a refinement instruction first.")
