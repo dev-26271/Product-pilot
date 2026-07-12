@@ -163,20 +163,29 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                     else:
                         st.warning("Please provide a refinement instruction.")
             else:
-                # Noncompiled State UI
+                # Noncompiled State UI — shown when tab is opened but document not yet generated
                 st.markdown("<div style='height: 2.5rem;'></div>", unsafe_allow_html=True)
                 st.markdown(f"""
                     <div style='text-align: center; color: #9E9E9E; padding: 4rem 2rem; border: 1px dashed #2A2A2A; border-radius: 10px;'>
                         <span style='font-size: 2rem; display: block; margin-bottom: 0.5rem;'>📄</span>
-                        <h4 style='color: #F5F5F5; font-weight: 500; margin-bottom: 0.25rem;'>This document has not been generated yet.</h4>
-                        <p style='font-size: 0.9rem;'>This document will be generated on demand.</p>
+                        <h4 style='color: #F5F5F5; font-weight: 500; margin-bottom: 0.25rem;'>This document hasn't been generated yet.</h4>
+                        <p style='font-size: 0.9rem;'>Generate it now?</p>
                     </div>
                 """, unsafe_allow_html=True)
                 st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
                 
-                # Placeholder button — no agent invocation
+                # Generate button — agent is ONLY called when user presses this
                 col_l, col_m, col_r = st.columns([1.5, 2, 1.5])
                 with col_m:
-                    if st.button(f"✨ Generate {tab_name}", key=f"lazy_gen_{tab_name}_{project['name']}", type="primary", use_container_width=True):
-                        st.info("Generation coming in the next step.")
+                    if st.button("Generate", key=f"lazy_gen_{tab_name}_{project['name']}", type="primary", use_container_width=True):
+                        with st.spinner(f"Generating {tab_name}..."):
+                            try:
+                                generated_content = run_lazy_agent(tab_name, project)
+                                project['deliverables'][map_name] = {
+                                    "content": generated_content
+                                }
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to generate {tab_name}: {e}")
+
 
