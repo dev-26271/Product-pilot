@@ -5,7 +5,7 @@ from rag import retrieve_business
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 def main():
-    query = "AI healthcare platform for doctors"
+    query = "Agile product management"
     print(f"\n[Test RAG] Running retrieval test for query: '{query}'...")
     
     results = retrieve_business(query, k=3)
