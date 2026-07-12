@@ -80,7 +80,7 @@ Business Analysis JSON:
         raise ValueError(f"LLM returned invalid JSON: {e}. Raw response: {raw_text}") from e
         
     # Check expected keys in JSON schema
-    required_keys = ["Features", "Roadmap"]
+    required_keys = ["Executive_Summary", "Functional_Requirements", "Core_Features", "Success_Metrics"]
     for key in required_keys:
         if key not in data:
             logger.warning(f"Key '{key}' is missing from generated Product Requirements JSON.")

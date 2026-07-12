@@ -43,43 +43,95 @@ class PythonLocalStrategy(OrchestrationStrategy):
         pm_duration = time.perf_counter() - pm_start
         logger.info(f"Product Manager Agent completed in {pm_duration:.4f} seconds.")
         
-        # Format the structured Markdown response content matching UI consumers
-        goals_markdown = "\n".join([f"- {goal}" for goal in business_analysis.get("Business Goals", [])])
-        personas_markdown = "\n\n".join([
+        # ── Assemble the 11-section industry-standard PRD from PM agent output ──
+        
+        # 1. Executive Summary
+        exec_summary = product_plan.get("Executive_Summary", "")
+        
+        # 2. Product Vision
+        product_vision = product_plan.get("Product_Vision", "")
+        
+        # 3. Problem Statement (prefer PM's enriched version; fall back to BA's)
+        problem_statement = product_plan.get("Problem_Statement") or business_analysis.get("Problem Statement", "")
+        
+        # 4. Goals & Objectives
+        goals_list = business_analysis.get("Business Goals", [])
+        objectives_list = product_plan.get("Goals_and_Objectives", [])
+        goals_md = "\n".join([f"- {g}" for g in goals_list])
+        objectives_md = "\n".join([f"- {o}" for o in objectives_list])
+        goals_and_objectives_md = (goals_md + ("\n" if goals_md and objectives_md else "") + objectives_md).strip()
+        
+        # 5. Functional Requirements
+        func_reqs = product_plan.get("Functional_Requirements", [])
+        func_reqs_md = "\n\n".join([
+            f"**{r.get('id', '')} — {r.get('title', '')}** (Priority: {r.get('priority', '')})\n"
+            f"{r.get('description', '')}\n"
+            f"*Acceptance Criteria:* {r.get('acceptance_criteria', '')}"
+            for r in func_reqs
+        ])
+        
+        # 6. Non-Functional Requirements (dict of categories)
+        nfr = product_plan.get("Non_Functional_Requirements", {})
+        if isinstance(nfr, dict):
+            nfr_md = "\n".join([f"**{k}:** {v}" for k, v in nfr.items()])
+        else:
+            nfr_md = "\n".join([f"- {r}" for r in nfr])
+        
+        # 7. Core Features
+        features = product_plan.get("Core_Features", [])
+        features_md = "\n\n".join([
+            f"**{f.get('name', '')} (Priority: {f.get('priority', '')})**\n"
+            f"{f.get('description', '')}\n"
+            f"*Business Value:* {f.get('business_value', '')}"
+            for f in features
+        ])
+        
+        # 8. Assumptions
+        assumptions_md = "\n".join([f"- {a}" for a in product_plan.get("Assumptions", [])])
+        
+        # 9. Constraints
+        constraints_md = "\n".join([f"- {c}" for c in product_plan.get("Constraints", [])])
+        
+        # 10. Success Metrics
+        metrics_md = "\n".join([f"- {m}" for m in product_plan.get("Success_Metrics", [])])
+        
+        # 11. Open Questions
+        questions_md = "\n".join([f"- {q}" for q in product_plan.get("Open_Questions", [])])
+        
+        # 12. User Personas (from BA)
+        personas_md = "\n\n".join([
             f"**{p.get('name')} ({p.get('role')})**\n{p.get('needs')}"
             for p in business_analysis.get("User Personas", [])
         ])
-        objectives_markdown = "\n".join([f"- {obj}" for obj in product_plan.get("Objectives", [])])
-        features_markdown = "\n\n".join([
-            f"**{f.get('name')} (Priority: {f.get('priority')})**\n{f.get('description')}"
-            for f in product_plan.get("Features", [])
-        ])
-        nfr_markdown = "\n".join([f"- {r}" for r in product_plan.get("Non_Functional_Requirements", [])])
-        metrics_markdown = "\n".join([f"- {m}" for m in product_plan.get("Success_Metrics", [])])
-        acceptance_markdown = "\n".join([f"- {a}" for a in product_plan.get("Acceptance_Criteria", [])])
         
         prd_content = {
-            "🎯 Problem Statement": business_analysis.get("Problem Statement", ""),
-            "📈 Business Goals": goals_markdown,
-            "👥 User Personas": personas_markdown,
-            "🏹 Objectives": objectives_markdown,
-            "✨ Core Features": features_markdown,
-            "⚙️ Non-Functional Requirements": nfr_markdown,
-            "📊 Success Metrics": metrics_markdown,
-            "✅ Acceptance Criteria": acceptance_markdown
+            "📋 Executive Summary":        exec_summary,
+            "🔭 Product Vision":            product_vision,
+            "🎯 Problem Statement":         problem_statement,
+            "👥 User Personas":             personas_md,
+            "📈 Goals & Objectives":        goals_and_objectives_md,
+            "⚙️ Functional Requirements":  func_reqs_md,
+            "🔒 Non-Functional Requirements": nfr_md,
+            "✨ Core Features":             features_md,
+            "💡 Assumptions":               assumptions_md,
+            "🚧 Constraints":               constraints_md,
+            "📊 Success Metrics":           metrics_md,
+            "❓ Open Questions":            questions_md,
         }
         
-        # Add risk analysis content if checked
+        # Remove blank sections to keep the UI clean
+        prd_content = {k: v for k, v in prd_content.items() if v and v.strip()}
+        
+        # Add risk analysis if selected
         if project_data.get("risk_analysis", True):
             prd_content["⚠️ Risk Factors"] = (
                 "Initial synchronization intervals and compatibility vectors during client updates."
             )
             
-        # Build the workspace — only PRD is generated initially; all others are lazy
+        # Build workspace — only PRD generated initially; all others are lazy
         deliverables = {
             "Product Requirements Document (PRD)": {"content": prd_content},
         }
-
         
         total_duration = time.perf_counter() - start_time
         logger.info(f"Initial PRD generation completed in {total_duration:.4f} seconds.")
