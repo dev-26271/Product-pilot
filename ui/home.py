@@ -58,25 +58,29 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
     with col_mid:
         if st.button("Create Blueprint →", type="primary", use_container_width=True):
             if idea.strip():
-                payload = {
-                    "idea": idea,
-                    "industry": industry,
-                    "product_type": product_type,
-                    "audience": audience,
-                    "deliverable": deliverable,
-                    "detail_level": detail_level,
-                    "risk_analysis": include_risk
+               payload = {
+                    "project": {
+                        "idea": idea,
+                        "industry": industry,
+                        "product_type": product_type,
+                        "audience": audience,
+                        "deliverable": deliverable,
+                        "detail_level": detail_level,
+                        "risk_analysis": include_risk
+                    }
                 }
-                
-                # Execute API Call through the backend abstraction module
-                response = create_project(payload)
-                if response["success"]:
+
+            result = create_project(payload)
+               # TEMPORARY (for testing)
+            st.json(result)
+               
+            if response["success"]:
                     st.success("Connected!")
                     st.json(response["data"])
-                else:
-                    st.error(f"Backend connection failed: {response.get('error')}")
             else:
-                st.warning("Please describe your product idea first.")
+                    st.error(f"Backend connection failed: {response.get('error')}")
+        else:
+         st.warning("Please describe your product idea first.")
 
 def render_empty_state() -> None:
     """Renders empty state message for new project templates."""
