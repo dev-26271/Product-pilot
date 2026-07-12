@@ -49,21 +49,24 @@ class PythonLocalStrategy(OrchestrationStrategy):
             f"**{p.get('name')} ({p.get('role')})**\n{p.get('needs')}"
             for p in business_analysis.get("User Personas", [])
         ])
+        objectives_markdown = "\n".join([f"- {obj}" for obj in product_plan.get("Objectives", [])])
         features_markdown = "\n\n".join([
             f"**{f.get('name')} (Priority: {f.get('priority')})**\n{f.get('description')}"
             for f in product_plan.get("Features", [])
         ])
-        roadmap_markdown = "\n\n".join([
-            f"**{r.get('phase')}**\n{r.get('scope')}"
-            for r in product_plan.get("Roadmap", [])
-        ])
+        nfr_markdown = "\n".join([f"- {r}" for r in product_plan.get("Non_Functional_Requirements", [])])
+        metrics_markdown = "\n".join([f"- {m}" for m in product_plan.get("Success_Metrics", [])])
+        acceptance_markdown = "\n".join([f"- {a}" for a in product_plan.get("Acceptance_Criteria", [])])
         
         prd_content = {
             "🎯 Problem Statement": business_analysis.get("Problem Statement", ""),
             "📈 Business Goals": goals_markdown,
             "👥 User Personas": personas_markdown,
-            "✨ Features": features_markdown,
-            "🗓️ Product Roadmap": roadmap_markdown
+            "🏹 Objectives": objectives_markdown,
+            "✨ Core Features": features_markdown,
+            "⚙️ Non-Functional Requirements": nfr_markdown,
+            "📊 Success Metrics": metrics_markdown,
+            "✅ Acceptance Criteria": acceptance_markdown
         }
         
         # Add risk analysis content if checked
@@ -72,11 +75,11 @@ class PythonLocalStrategy(OrchestrationStrategy):
                 "Initial synchronization intervals and compatibility vectors during client updates."
             )
             
-        # Build the workspace with explicit None slots for lazy documents
+        # Build the workspace — only PRD is generated initially; all others are lazy
         deliverables = {
             "Product Requirements Document (PRD)": {"content": prd_content},
-            # All other documents are None — generated lazily on user request
         }
+
         
         total_duration = time.perf_counter() - start_time
         logger.info(f"Initial PRD generation completed in {total_duration:.4f} seconds.")
