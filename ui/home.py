@@ -1,8 +1,8 @@
 import streamlit as st
 from typing import Tuple, Dict, Any
-from ui.forms import render_project_configuration
+from ui.forms import render_project_configuration, render_execution_mode
 from ui.output import render_project_deliverables
-from backend.api import create_project
+from backend.orchestrator import generate_prd
 
 def render_hero() -> None:
     """Renders the top branding header with updated visual hierarchy."""
@@ -51,14 +51,14 @@ def render_idea_input() -> str:
     st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
     return idea
 
-def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, bool]) -> None:
+def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, bool], execution_mode: str) -> None:
     """Renders the centered Create Blueprint CTA button and handles generation logic."""
     industry, product_type, audience, deliverable, detail_level, include_risk = config
     col_left, col_mid, col_right = st.columns([1.2, 2.6, 1.2])
     with col_mid:
         if st.button("Create Blueprint →", type="primary", use_container_width=True):
             if idea.strip():
-               payload = {
+                payload = {
                     "project": {
                         "idea": idea,
                         "industry": industry,
@@ -67,20 +67,34 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                         "deliverable": deliverable,
                         "detail_level": detail_level,
                         "risk_analysis": include_risk
-                    }
+                    },
+                    "mode": execution_mode
                 }
-
-            result = create_project(payload)
-               # TEMPORARY (for testing)
-            st.json(result)
-               
-            if response["success"]:
-                    st.success("Connected!")
-                    st.json(response["data"])
+                
+                with st.spinner("ProductPilot Orchestrator running pipeline..."):
+                    result = generate_prd(payload)
+                
+                if result.get("success"):
+                    # Derive a clean project name
+                    proj_name = " ".join(idea.split()[:2]) + " Project"
+                    
+                    # Store generated artifacts in session state
+                    st.session_state['projects'][proj_name] = {
+                        "name": proj_name,
+                        "metadata": "Active",
+                        "idea": idea,
+                        "industry": industry,
+                        "product_type": product_type,
+                        "audience": audience,
+                        "deliverables": result["data"]
+                    }
+                    st.session_state['active_project_id'] = proj_name
+                    st.success("Blueprint created successfully!")
+                    st.rerun()
+                else:
+                    st.error(f"Orchestration failed: {result.get('error')}")
             else:
-                    st.error(f"Backend connection failed: {response.get('error')}")
-        else:
-         st.warning("Please describe your product idea first.")
+                st.warning("Please describe your product idea first.")
 
 def render_empty_state() -> None:
     """Renders empty state message for new project templates."""
@@ -116,8 +130,9 @@ def render_home() -> None:
         render_hero()
         idea = render_idea_input()
         config = render_project_configuration()
+        execution_mode = render_execution_mode()
         st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
-        render_generate_button(idea, config)
+        render_generate_button(idea, config, execution_mode)
         st.markdown("<hr>", unsafe_allow_html=True)
         render_empty_state()
     else:
