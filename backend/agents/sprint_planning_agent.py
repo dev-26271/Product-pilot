@@ -14,7 +14,18 @@ def generate_sprint_backlog(workspace: Dict[str, Any]) -> Dict[str, Any]:
     logger.info(f"Sprint Planning Agent generating backlog for project '{workspace.get('name')}'...")
     
     prd = workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {})
-    user_stories = workspace.get('deliverables', {}).get('User Stories', {})
+    
+    # User Stories may be stored as structured JSON {"epics":[...], "stories":[...]}
+    # or as a legacy {"content": {...}} dict. Extract both epics and stories for context.
+    raw_us = workspace.get('deliverables', {}).get('User Stories', {})
+    if isinstance(raw_us, dict) and 'stories' in raw_us:
+        us_epics   = raw_us.get('epics', [])
+        us_stories = raw_us.get('stories', [])
+        user_stories_context = {"epics": us_epics, "stories": us_stories}
+    elif isinstance(raw_us, dict) and 'content' in raw_us:
+        user_stories_context = raw_us['content']  # legacy markdown format
+    else:
+        user_stories_context = {}
     
     user_message = f"""Project Context:
 Idea: {workspace.get('idea')}
@@ -25,10 +36,11 @@ Audience: {workspace.get('audience')}
 Existing PRD:
 {json.dumps(prd, indent=2)}
 
-User Stories:
-{json.dumps(user_stories, indent=2) if user_stories else "Not generated yet."}
+User Stories and Epics (structured Agile artifacts — use these as sprint input):
+{json.dumps(user_stories_context, indent=2) if user_stories_context else "Not generated yet. Base sprint backlog on the PRD only."}
 """
     llm = get_llm()
+
     messages = [
         ("system", SPRINT_PLANNING_AGENT_SYSTEM_PROMPT),
         ("user", user_message)

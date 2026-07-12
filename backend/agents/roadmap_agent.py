@@ -15,6 +15,14 @@ def generate_roadmap(workspace: Dict[str, Any]) -> Dict[str, Any]:
     
     prd = workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {})
     
+    # User Stories may be stored as structured JSON {"epics":[...], "stories":[...]}
+    # Pull epics for release/phase alignment in roadmap generation.
+    raw_us = workspace.get('deliverables', {}).get('User Stories', {})
+    if isinstance(raw_us, dict) and 'epics' in raw_us:
+        us_epics_context = raw_us.get('epics', [])
+    else:
+        us_epics_context = []
+    
     user_message = f"""Project Context:
 Idea: {workspace.get('idea')}
 Industry: {workspace.get('industry')}
@@ -23,7 +31,11 @@ Audience: {workspace.get('audience')}
 
 Existing PRD:
 {json.dumps(prd, indent=2)}
+
+User Story Epics (use release fields to align roadmap phases):
+{json.dumps(us_epics_context, indent=2) if us_epics_context else "Not generated yet. Build roadmap from the PRD only."}
 """
+
     llm = get_llm()
     messages = [
         ("system", ROADMAP_AGENT_SYSTEM_PROMPT),
