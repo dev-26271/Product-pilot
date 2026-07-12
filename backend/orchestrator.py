@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 from backend.agents.business_analyst import generate_business_analysis
-from backend.agents.product_manager import generate_product_plan
+from backend.agents.product_manager import generate_product_requirements
 from backend.api import create_project
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class PythonLocalStrategy(OrchestrationStrategy):
         
         # Step 2: Run Product Manager Agent
         pm_start = time.perf_counter()
-        product_plan = generate_product_plan(project_data, business_analysis)
+        product_plan = generate_product_requirements(business_analysis)
         pm_duration = time.perf_counter() - pm_start
         logger.info(f"Product Manager Agent completed in {pm_duration:.4f} seconds.")
         

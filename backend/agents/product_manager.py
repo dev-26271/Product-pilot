@@ -7,47 +7,49 @@ from backend.prompts import PRODUCT_MANAGER_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
-def generate_product_plan(user_input: Dict[str, Any], business_analysis: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates structured Product Plan JSON based on RAG context, Business Analysis, and user inputs.
+def generate_product_requirements(business_analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """Generates structured Product Requirements JSON based on RAG context and Business Analysis.
     
     Args:
-        user_input (dict): Dict containing 'idea', 'industry', etc.
         business_analysis (dict): Output from the Business Analyst agent.
         
     Returns:
-        dict: Parsed and validated Product Plan JSON.
+        dict: Parsed and validated Product Requirements JSON.
         
     Raises:
-        ValueError: If user_input idea is empty or parsing generated JSON fails.
+        ValueError: If business_analysis input is empty or parsing generated JSON fails.
         RuntimeError: If LLM invocation fails.
     """
-    idea = user_input.get("idea", "")
-    if not idea:
-        raise ValueError("Product idea cannot be empty inside user_input.")
+    if not business_analysis:
+        raise ValueError("business_analysis input cannot be empty.")
         
-    logger.info(f"Retrieving product context for idea: '{idea[:50]}...'")
+    # Step 1: Extract context components from Business Analysis JSON
+    problem = business_analysis.get("Problem Statement", "")
+    goals = " ".join(business_analysis.get("Business Goals", []))
+    personas = " ".join([
+        f"{p.get('name')} {p.get('role')} {p.get('needs')}" 
+        for p in business_analysis.get("User Personas", [])
+    ])
     
-    # Step 1: Call retrieve_product
-    context_docs = retrieve_product(idea, k=3)
+    # Step 2: Build a retrieval query focusing on goals, personas, scope and problems
+    retrieval_query = f"{problem} {goals} {personas}".strip()
+    logger.info(f"Building retrieval query for Product KB: '{retrieval_query[:80]}...'")
+    
+    # Step 3: Retrieve top 3 relevant chunks from the Product knowledge base
+    context_docs = retrieve_product(retrieval_query, k=3)
     context_str = "\n\n".join([doc.page_content for doc in context_docs])
     logger.info(f"Retrieved {len(context_docs)} chunks from product index.")
     
-    # Step 2: Build final prompt
-    user_message = f"""Context Chunks:
+    # Step 4: Build prompt combining System Prompt + Context + Business Analysis JSON
+    user_message = f"""Retrieved Product Context:
 {context_str}
 
-Business Analysis Details:
+Business Analysis JSON:
 {json.dumps(business_analysis, indent=2)}
-
-User Input:
-Product Idea: {idea}
-Industry: {user_input.get("industry", "Unknown")}
-Product Type: {user_input.get("product_type", "Unknown")}
-Audience: {user_input.get("audience", "Unknown")}
 """
     
-    # Step 3: Invoke the Groq Model
-    logger.info("Invoking LLM for Product Plan generation...")
+    # Step 5: Invoke the Groq Model using ChatGroq instance
+    logger.info("Invoking LLM for Product Requirements generation...")
     llm = get_llm()
     messages = [
         ("system", PRODUCT_MANAGER_SYSTEM_PROMPT),
@@ -70,7 +72,7 @@ Audience: {user_input.get("audience", "Unknown")}
             lines = lines[:-1]
         raw_text = "\n".join(lines).strip()
         
-    # Step 4 & 5: Parse and validate JSON
+    # Step 6 & 7: Parse and validate JSON
     try:
         data = json.loads(raw_text)
     except json.JSONDecodeError as e:
@@ -81,7 +83,7 @@ Audience: {user_input.get("audience", "Unknown")}
     required_keys = ["Features", "Roadmap"]
     for key in required_keys:
         if key not in data:
-            logger.warning(f"Key '{key}' is missing from generated Product Plan JSON.")
+            logger.warning(f"Key '{key}' is missing from generated Product Requirements JSON.")
             
-    logger.info("Product Plan successfully generated and validated.")
+    logger.info("Product Requirements successfully generated and validated.")
     return data
