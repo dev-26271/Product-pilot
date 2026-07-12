@@ -7,15 +7,22 @@ from backend.prompts import SRS_AGENT_SYSTEM_PROMPT
 logger = logging.getLogger(__name__)
 
 def generate_srs(workspace: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates Software Requirements Specification (SRS) JSON using LLM."""
+    """Generates Software Requirements Specification (SRS) JSON using LLM.
+    
+    Context: Original idea and existing PRD.
+    """
     logger.info(f"SRS Agent generating SRS for project '{workspace.get('name')}'...")
+    
+    prd = workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {})
     
     user_message = f"""Project Context:
 Idea: {workspace.get('idea')}
 Industry: {workspace.get('industry')}
 Product Type: {workspace.get('product_type')}
 Audience: {workspace.get('audience')}
-Existing PRD: {json.dumps(workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {}), indent=2)}
+
+Existing PRD:
+{json.dumps(prd, indent=2)}
 """
     llm = get_llm()
     messages = [

@@ -7,15 +7,22 @@ from backend.prompts import USER_STORY_AGENT_SYSTEM_PROMPT
 logger = logging.getLogger(__name__)
 
 def generate_user_stories(workspace: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates User Stories JSON using LLM."""
+    """Generates User Stories JSON using LLM.
+    
+    Context: Original idea and existing PRD.
+    """
     logger.info(f"User Story Agent generating user stories for project '{workspace.get('name')}'...")
+    
+    prd = workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {})
     
     user_message = f"""Project Context:
 Idea: {workspace.get('idea')}
 Industry: {workspace.get('industry')}
 Product Type: {workspace.get('product_type')}
 Audience: {workspace.get('audience')}
-Existing PRD: {json.dumps(workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {}), indent=2)}
+
+Existing PRD:
+{json.dumps(prd, indent=2)}
 """
     llm = get_llm()
     messages = [

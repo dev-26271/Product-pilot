@@ -18,14 +18,18 @@ class OrchestrationStrategy(ABC):
         pass
 
 class PythonLocalStrategy(OrchestrationStrategy):
-    """Runs the complete multi-agent pipeline locally on python using local agent modules."""
+    """Runs the initial PRD-only pipeline locally using BA → PM agents.
+    
+    This strategy generates ONLY the PRD. All other documents (BRD, SRS,
+    User Stories, Roadmap, Jira Tasks, Sprint Backlog) are generated lazily
+    on demand via their specialized agents.
+    """
     
     def execute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info("Executing PythonLocalStrategy...")
+        logger.info("Executing PythonLocalStrategy (PRD-only initial generation)...")
         start_time = time.perf_counter()
         
         project_data = payload.get("project", payload)
-        deliverable = project_data.get("deliverable", "Product Requirements Document (PRD)")
         
         # Step 1: Run Business Analyst Agent
         ba_start = time.perf_counter()
@@ -33,7 +37,7 @@ class PythonLocalStrategy(OrchestrationStrategy):
         ba_duration = time.perf_counter() - ba_start
         logger.info(f"Business Analyst Agent completed in {ba_duration:.4f} seconds.")
         
-        # Step 2: Run Product Manager Agent
+        # Step 2: Run Product Manager Agent to produce PRD content
         pm_start = time.perf_counter()
         product_plan = generate_product_requirements(business_analysis)
         pm_duration = time.perf_counter() - pm_start
@@ -54,30 +58,33 @@ class PythonLocalStrategy(OrchestrationStrategy):
             for r in product_plan.get("Roadmap", [])
         ])
         
-        deliverables_dict = {
-            "Product Requirements Document (PRD)": {
-                "content": {
-                    "🎯 Problem Statement": business_analysis.get("Problem Statement", ""),
-                    "📈 Business Goals": goals_markdown,
-                    "👥 User Personas": personas_markdown,
-                    "✨ Features": features_markdown,
-                    "🗓️ Product Roadmap": roadmap_markdown
-                }
-            }
+        prd_content = {
+            "🎯 Problem Statement": business_analysis.get("Problem Statement", ""),
+            "📈 Business Goals": goals_markdown,
+            "👥 User Personas": personas_markdown,
+            "✨ Features": features_markdown,
+            "🗓️ Product Roadmap": roadmap_markdown
         }
         
         # Add risk analysis content if checked
         if project_data.get("risk_analysis", True):
-            deliverables_dict["Product Requirements Document (PRD)"]["content"]["⚠️ Risk Factors"] = (
+            prd_content["⚠️ Risk Factors"] = (
                 "Initial synchronization intervals and compatibility vectors during client updates."
             )
             
+        # Build the workspace with explicit None slots for lazy documents
+        deliverables = {
+            "Product Requirements Document (PRD)": {"content": prd_content},
+            # All other documents are None — generated lazily on user request
+        }
+        
         total_duration = time.perf_counter() - start_time
-        logger.info(f"Local Python orchestration pipeline completed in {total_duration:.4f} seconds.")
+        logger.info(f"Initial PRD generation completed in {total_duration:.4f} seconds.")
         
         return {
             "success": True,
-            "data": deliverables_dict
+            "data": deliverables,
+            "business_analysis": business_analysis
         }
 
 class N8NWebhookStrategy(OrchestrationStrategy):
@@ -94,7 +101,11 @@ class N8NWebhookStrategy(OrchestrationStrategy):
         return response
 
 def generate_prd(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Resolves the configured strategy and executes the PRD orchestration pipeline.
+    """Resolves the configured strategy and executes the PRD-only initial generation.
+    
+    This function generates ONLY the PRD as the workspace foundation.
+    No other documents are generated here. They are produced lazily
+    by their specialized agents when the user explicitly requests them.
     
     Strategy Selection Priority:
     1. User selection passed in payload (e.g. payload["mode"])
@@ -105,7 +116,7 @@ def generate_prd(payload: Dict[str, Any]) -> Dict[str, Any]:
         payload (dict): The project payload.
         
     Returns:
-        dict: The generation outcome.
+        dict: The generation outcome containing PRD deliverables and business_analysis.
     """
     mode = payload.get("mode")
     if not mode:

@@ -7,15 +7,26 @@ from backend.prompts import BRD_AGENT_SYSTEM_PROMPT
 logger = logging.getLogger(__name__)
 
 def generate_brd(workspace: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates Business Requirements Document (BRD) JSON using LLM."""
+    """Generates Business Requirements Document (BRD) JSON using LLM.
+    
+    Context: Original idea, business analysis, and existing PRD.
+    """
     logger.info(f"BRD Agent generating BRD for project '{workspace.get('name')}'...")
+    
+    prd = workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {})
+    ba = workspace.get('business_analysis', {})
     
     user_message = f"""Project Context:
 Idea: {workspace.get('idea')}
 Industry: {workspace.get('industry')}
 Product Type: {workspace.get('product_type')}
 Audience: {workspace.get('audience')}
-Existing PRD: {json.dumps(workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {}), indent=2)}
+
+Business Analysis:
+{json.dumps(ba, indent=2) if ba else "Not available."}
+
+Existing PRD:
+{json.dumps(prd, indent=2)}
 """
     llm = get_llm()
     messages = [

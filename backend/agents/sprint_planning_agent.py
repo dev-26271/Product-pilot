@@ -7,15 +7,26 @@ from backend.prompts import SPRINT_PLANNING_AGENT_SYSTEM_PROMPT
 logger = logging.getLogger(__name__)
 
 def generate_sprint_backlog(workspace: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates Sprint Backlog JSON using LLM."""
+    """Generates Sprint Backlog JSON using LLM.
+    
+    Context: PRD + User Stories (if available).
+    """
     logger.info(f"Sprint Planning Agent generating backlog for project '{workspace.get('name')}'...")
+    
+    prd = workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {})
+    user_stories = workspace.get('deliverables', {}).get('User Stories', {})
     
     user_message = f"""Project Context:
 Idea: {workspace.get('idea')}
 Industry: {workspace.get('industry')}
 Product Type: {workspace.get('product_type')}
 Audience: {workspace.get('audience')}
-Existing PRD: {json.dumps(workspace.get('deliverables', {}).get('Product Requirements Document (PRD)', {}), indent=2)}
+
+Existing PRD:
+{json.dumps(prd, indent=2)}
+
+User Stories:
+{json.dumps(user_stories, indent=2) if user_stories else "Not generated yet."}
 """
     llm = get_llm()
     messages = [

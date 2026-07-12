@@ -71,7 +71,7 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                     "mode": execution_mode
                 }
                 
-                with st.spinner("ProductPilot Orchestrator running pipeline..."):
+                with st.spinner("ProductPilot generating PRD..."):
                     result = generate_prd(payload)
                 
                 if result.get("success"):
@@ -79,6 +79,7 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                     proj_name = " ".join(idea.split()[:2]) + " Project"
                     
                     # Store generated artifacts in session state
+                    # Only the PRD is generated initially — all others are None (lazy)
                     st.session_state['projects'][proj_name] = {
                         "name": proj_name,
                         "metadata": "Active",
@@ -86,10 +87,11 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                         "industry": industry,
                         "product_type": product_type,
                         "audience": audience,
+                        "business_analysis": result.get("business_analysis", {}),
                         "deliverables": result["data"]
                     }
                     st.session_state['active_project_id'] = proj_name
-                    st.success("Blueprint created successfully!")
+                    st.success("PRD generated — workspace ready!")
                     st.rerun()
                 else:
                     st.error(f"Orchestration failed: {result.get('error')}")
