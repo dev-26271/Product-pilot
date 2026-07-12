@@ -1,30 +1,26 @@
 import logging
+import time
 from rag import retrieve_business
 
 # Enable logging output for visibility
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 def main():
-    query = "Agile product management"
-    print(f"\n[Test RAG] Running retrieval test for query: '{query}'...")
+    query = "AI healthcare platform for doctors"
     
-    results = retrieve_business(query, k=3)
+    print("\n--- RUN 1: Cold start (should trigger initialization and loading) ---")
+    start_run1 = time.perf_counter()
+    results1 = retrieve_business(query, k=3)
+    duration_run1 = time.perf_counter() - start_run1
+    print(f"Run 1 completed in {duration_run1:.4f} seconds.")
     
-    if not results:
-        print("\n[Test RAG] No results retrieved. Vectorstore index may be empty or not built yet.")
-        return
+    print("\n--- RUN 2: Cached query (should reuse in-memory objects) ---")
+    start_run2 = time.perf_counter()
+    results2 = retrieve_business(query, k=3)
+    duration_run2 = time.perf_counter() - start_run2
+    print(f"Run 2 completed in {duration_run2:.4f} seconds.")
 
-    print(f"\n[Test RAG] Retrieved {len(results)} relevant chunks:")
-    for idx, doc in enumerate(results):
-        source = doc.metadata.get("source", "Unknown")
-        page = doc.metadata.get("page", "N/A")
-        # Format preview text cleanly
-        preview = doc.page_content[:250].replace("\n", " ")
-        
-        print(f"\n--- Match {idx + 1} ---")
-        print(f"Source: {source}")
-        print(f"Page: {page}")
-        print(f"Preview: {preview}...")
+    print(f"\nTime saved by caching: {duration_run1 - duration_run2:.4f} seconds.")
 
 if __name__ == "__main__":
     main()
