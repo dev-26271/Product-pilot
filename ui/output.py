@@ -168,23 +168,15 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                 st.markdown(f"""
                     <div style='text-align: center; color: #9E9E9E; padding: 4rem 2rem; border: 1px dashed #2A2A2A; border-radius: 10px;'>
                         <span style='font-size: 2rem; display: block; margin-bottom: 0.5rem;'>📄</span>
-                        <h4 style='color: #F5F5F5; font-weight: 500; margin-bottom: 0.25rem;'>{tab_name} has not been generated yet</h4>
-                        <p style='font-size: 0.9rem;'>This document has not been generated yet.</p>
+                        <h4 style='color: #F5F5F5; font-weight: 500; margin-bottom: 0.25rem;'>This document has not been generated yet.</h4>
+                        <p style='font-size: 0.9rem;'>This document will be generated on demand.</p>
                     </div>
                 """, unsafe_allow_html=True)
                 st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
                 
-                # Lazy compile Action button
+                # Placeholder button — no agent invocation
                 col_l, col_m, col_r = st.columns([1.5, 2, 1.5])
                 with col_m:
                     if st.button(f"✨ Generate {tab_name}", key=f"lazy_gen_{tab_name}_{project['name']}", type="primary", use_container_width=True):
-                        with st.spinner(f"AI Agent generating {tab_name}..."):
-                            try:
-                                generated_content = run_lazy_agent(tab_name, project)
-                                project['deliverables'][map_name] = {
-                                    "content": generated_content
-                                }
-                                st.success(f"{tab_name} generated successfully!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Failed to generate {tab_name}: {e}")
+                        st.info("Generation coming in the next step.")
+
