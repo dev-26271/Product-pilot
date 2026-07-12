@@ -1,9 +1,8 @@
 import streamlit as st
 import time
 from typing import Dict, Any
-from backend.agents.workspace_chat import chat_refine_workspace
 
-def render_progress_panel(step: int, deliverable_name: str = "Product Requirements Document (PRD)") -> None:
+def render_progress_panel(step: int, deliverable_name: str) -> None:
     """Renders progress states when compilation workflow executes."""
     s1_status = "Completed ✓" if step > 1 else "Running" if step == 1 else "Waiting"
     s1_desc = f"Mapping specifications for {deliverable_name}..." if step >= 1 else "Queueing mapping engine..."
@@ -43,8 +42,44 @@ def render_progress_panel(step: int, deliverable_name: str = "Product Requiremen
         </div>
     """, unsafe_allow_html=True)
 
+def get_full_name(tab_name: str) -> str:
+    """Maps short tab shorthand string names to full deliverables dictionary keys."""
+    if tab_name == "PRD":
+        return "Product Requirements Document (PRD)"
+    elif tab_name == "BRD":
+        return "Business Requirements Document (BRD)"
+    elif tab_name == "SRS":
+        return "Software Requirements Specification (SRS)"
+    elif tab_name == "Roadmap":
+        return "Product Roadmap"
+    else:
+        return tab_name
+
+def run_lazy_agent(tab_name: str, project: Dict[str, Any]) -> Dict[str, Any]:
+    """Invokes the specific specialized AI Agent based on target tab selection."""
+    if tab_name == "BRD":
+        from backend.agents.brd_agent import generate_brd
+        return generate_brd(project)
+    elif tab_name == "SRS":
+        from backend.agents.srs_agent import generate_srs
+        return generate_srs(project)
+    elif tab_name == "User Stories":
+        from backend.agents.user_story_agent import generate_user_stories
+        return generate_user_stories(project)
+    elif tab_name == "Roadmap":
+        from backend.agents.roadmap_agent import generate_roadmap
+        return generate_roadmap(project)
+    elif tab_name == "Jira Tasks":
+        from backend.agents.jira_agent import generate_jira_tasks
+        return generate_jira_tasks(project)
+    elif tab_name == "Sprint Backlog":
+        from backend.agents.sprint_planning_agent import generate_sprint_backlog
+        return generate_sprint_backlog(project)
+    else:
+        raise ValueError(f"Unknown lazy agent domain tab: {tab_name}")
+
 def render_project_deliverables(project: Dict[str, Any]) -> None:
-    """Renders the document deliverables inside tabs for an active project."""
+    """Renders document deliverables tabs dynamically showing compilation status."""
     tab_names = [
         "PRD", 
         "BRD", 
@@ -54,68 +89,28 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
         "Jira Tasks", 
         "Sprint Backlog"
     ]
-    tabs = st.tabs(tab_names)
     
-    # Handle Tab Generation Requests
-    generating_tab = st.session_state.get('generating_tab', None)
-    if generating_tab:
-        progress_container = st.empty()
-        with progress_container.container():
-            render_progress_panel(step=2, deliverable_name=generating_tab)
-        time.sleep(1.8)
-        
-        # Populate content mock data for that tab
-        mock_tabs_data = {
-            "Product Requirements Document (PRD)": {
-                "🎯 Problem Statement": "System lacks continuous telemetry logging frameworks.",
-                "✨ Key Features": "Continuous Glucose Monitor passive sync routines."
-            },
-            "Business Requirements Document (BRD)": {
-                "📈 Market Overview": "High potential for passive tracking inside medical sectors.",
-                "💰 Financial Model": "SaaS per-seat billing to medical clinic accounts."
-            },
-            "Software Requirements Specification (SRS)": {
-                "⚙️ API Schema": "GET /api/v1/telemetry/glucose\nPOST /api/v1/alert/dispatch",
-                "🔒 Compliance": "HIPAA encrypted storage protocols using AES-256."
-            },
-            "User Stories": {
-                "📖 Doctor View": "- *As a practitioner, I want to review hourly trend statistics to assess medication effectiveness.*"
-            },
-            "Product Roadmap": {
-                "🗓️ Milestone 1": "Setup continuous API ingest pipeline (ETA: Month 2)."
-            },
-            "Jira Tasks": {
-                "🎫 PM-101": "Write validation logic for incoming blood glucose readings.\n- Priority: High\n- Estimate: 3 Story Points"
-            },
-            "Sprint Backlog": {
-                "🏃 Sprint 1 Goals": "- Configure database schemas.\n- Integrate authentication keys."
-            }
-        }
-        
-        project['deliverables'][generating_tab] = {
-            "content": mock_tabs_data.get(generating_tab, {"Output": "Compiled details draft."})
-        }
-        st.session_state['generating_tab'] = None
-        progress_container.empty()
-        st.rerun()
+    # 🟢 green circle indicator if generated, otherwise white text
+    tab_titles = []
+    for name in tab_names:
+        full_name = get_full_name(name)
+        if full_name in project.get('deliverables', {}):
+            tab_titles.append(f"🟢 {name}")
+        else:
+            tab_titles.append(name)
+            
+    tabs = st.tabs(tab_titles)
 
     for idx, tab_name in enumerate(tab_names):
         with tabs[idx]:
-            # Map shorthand tab name to full deliverable dictionary key
-            map_name = tab_name
-            if tab_name == "PRD":
-                map_name = "Product Requirements Document (PRD)"
-            elif tab_name == "BRD":
-                map_name = "Business Requirements Document (BRD)"
-            elif tab_name == "SRS":
-                map_name = "Software Requirements Specification (SRS)"
-            elif tab_name == "Roadmap":
-                map_name = "Product Roadmap"
+            map_name = get_full_name(tab_name)
             
             # Check if this deliverable has content compiled
-            if map_name in project['deliverables']:
+            if map_name in project.get('deliverables', {}):
                 st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
                 doc_data = project['deliverables'][map_name]["content"]
+                
+                # Render document sections
                 for section_title, section_content in doc_data.items():
                     st.markdown(f"""
                         <div class="prd-section">
@@ -123,88 +118,73 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                             <div class="prd-section-content">{section_content.replace(chr(10), '<br>')}</div>
                         </div>
                     """, unsafe_allow_html=True)
+                    
+                # Targeted Refinement Section for this document page
+                st.markdown("<hr style='border-top: 1px solid #2A2A2A; margin: 2rem 0;'>", unsafe_allow_html=True)
+                st.markdown(f"<h4 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>⚡ Refine {tab_name}</h4>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1rem;'>Provide refinement instructions to edit sections of this {tab_name} document.</p>", unsafe_allow_html=True)
+                
+                refine_input = st.text_area(
+                    f"Instruction for {tab_name}",
+                    placeholder=f"Example:\nAdd details to clarify data integration parameters or user workflows...",
+                    key=f"refine_in_{tab_name}_{project['name']}",
+                    height=80,
+                    label_visibility="collapsed"
+                )
+                
+                # Determine button label based on specs
+                button_label = f"Refine {tab_name}"
+                if tab_name == "Roadmap":
+                    button_label = "Expand Roadmap"
+                elif tab_name == "Jira Tasks":
+                    button_label = "Generate Additional Tasks"
+                    
+                if st.button(button_label, key=f"refine_btn_{tab_name}_{project['name']}", type="primary"):
+                    if refine_input.strip():
+                        with st.spinner(f"Refining {tab_name}..."):
+                            try:
+                                from backend.agents.document_refiner import refine_document
+                                current_content = project['deliverables'][map_name]["content"]
+                                
+                                # Call document specific refiner
+                                updated_content = refine_document(
+                                    document_name=map_name,
+                                    current_content=current_content,
+                                    instruction=refine_input,
+                                    workspace=project
+                                )
+                                
+                                # Cache updated deliverables content
+                                project['deliverables'][map_name]["content"] = updated_content
+                                st.success(f"{tab_name} refined successfully!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to refine {tab_name}: {e}")
+                    else:
+                        st.warning("Please provide a refinement instruction.")
             else:
                 # Noncompiled State UI
                 st.markdown("<div style='height: 2.5rem;'></div>", unsafe_allow_html=True)
                 st.markdown(f"""
                     <div style='text-align: center; color: #9E9E9E; padding: 4rem 2rem; border: 1px dashed #2A2A2A; border-radius: 10px;'>
                         <span style='font-size: 2rem; display: block; margin-bottom: 0.5rem;'>📄</span>
-                        <h4 style='color: #F5F5F5; font-weight: 500; margin-bottom: 0.25rem;'>{tab_name} is not compiled yet</h4>
-                        <p style='font-size: 0.9rem;'>Establish and build out this deliverable for {project['name']}.</p>
+                        <h4 style='color: #F5F5F5; font-weight: 500; margin-bottom: 0.25rem;'>{tab_name} has not been generated yet</h4>
+                        <p style='font-size: 0.9rem;'>This document has not been generated yet.</p>
                     </div>
                 """, unsafe_allow_html=True)
                 st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
                 
-                # Generate Button for this specific Deliverable
+                # Lazy compile Action button
                 col_l, col_m, col_r = st.columns([1.5, 2, 1.5])
                 with col_m:
-                    if st.button(f"Generate {tab_name} →", key=f"gen_{tab_name}_{project['name']}", type="primary"):
-                        st.session_state['generating_tab'] = map_name
-                        st.rerun()
-
-    # --- AI Product Manager Chat Panel ---
-    st.markdown("<hr style='border-top: 1px solid #2A2A2A; margin: 3rem 0;'>", unsafe_allow_html=True)
-    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>💬 AI Product Manager Refinement Chat</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.25rem;'>Work iteratively with a senior PM to refine features, personas, or adjust roadmap releases across your workspace deliverables.</p>", unsafe_allow_html=True)
-    
-    # Initialize chat history inside project if not present
-    if 'chat_history' not in project:
-        project['chat_history'] = [
-            {
-                "role": "assistant", 
-                "content": f"Hello, I am your senior Product Manager. How can I help refine **{project['name']}** today?"
-            }
-        ]
-        
-    # Render scrollable Chat Container
-    chat_container = st.container(height=300, border=True)
-    with chat_container:
-        for msg in project['chat_history']:
-            if msg["role"] == "user":
-                st.chat_message("user").write(msg["content"])
-            else:
-                st.chat_message("assistant").write(msg["content"])
-                
-    # Multiline chat input
-    user_chat_input = st.text_area(
-        "Refine strategy / Ask a question",
-        placeholder="Type your instruction or question...",
-        key=f"chat_in_{project['name']}",
-        height=80,
-        label_visibility="collapsed"
-    )
-    
-    # Send Button
-    col1, col2 = st.columns([5, 1])
-    with col2:
-        if st.button("Send", type="primary", use_container_width=True, key=f"send_{project['name']}"):
-            if user_chat_input.strip():
-                # Save user message to history
-                project['chat_history'].append({"role": "user", "content": user_chat_input})
-                
-                with st.spinner("AI Product Manager analyzing..."):
-                    try:
-                        # Run PM refinement logic passing current history (excluding new message to act as history context)
-                        chat_result = chat_refine_workspace(
-                            workspace=project,
-                            chat_history=project['chat_history'][:-1],
-                            user_message=user_chat_input
-                        )
-                        
-                        # Save response to history
-                        project['chat_history'].append({
-                            "role": "assistant", 
-                            "content": chat_result["chat_response"]
-                        })
-                        
-                        # If deliverables were updated, replace them
-                        if chat_result.get("updated_tabs"):
-                            project['deliverables'] = chat_result["deliverables"]
-                            st.toast(f"Updated sections: {', '.join(chat_result['updated_tabs'])}")
-                            
-                        st.success("Refined successfully!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error executing refinement: {e}")
-            else:
-                st.warning("Please enter a message first.")
+                    if st.button(f"✨ Generate {tab_name}", key=f"lazy_gen_{tab_name}_{project['name']}", type="primary", use_container_width=True):
+                        with st.spinner(f"AI Agent generating {tab_name}..."):
+                            try:
+                                generated_content = run_lazy_agent(tab_name, project)
+                                project['deliverables'][map_name] = {
+                                    "content": generated_content
+                                }
+                                st.success(f"{tab_name} generated successfully!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to generate {tab_name}: {e}")
