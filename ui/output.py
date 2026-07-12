@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from typing import Dict, Any
-from backend.agents.workspace_editor import update_workspace
+from backend.agents.workspace_chat import chat_refine_workspace
 
 def render_progress_panel(step: int, deliverable_name: str = "Product Requirements Document (PRD)") -> None:
     """Renders progress states when compilation workflow executes."""
@@ -142,27 +142,69 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                         st.session_state['generating_tab'] = map_name
                         st.rerun()
 
-    # --- AI Workspace Editor Section ---
+    # --- AI Product Manager Chat Panel ---
     st.markdown("<hr style='border-top: 1px solid #2A2A2A; margin: 3rem 0;'>", unsafe_allow_html=True)
-    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>⚡ AI Workspace Editor</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.25rem;'>Provide refinement instructions to edit features, personas, or roadmap phases globally across the workspace.</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>💬 AI Product Manager Refinement Chat</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.25rem;'>Work iteratively with a senior PM to refine features, personas, or adjust roadmap releases across your workspace deliverables.</p>", unsafe_allow_html=True)
     
-    edit_instruction = st.text_area(
-        "Refinement Instructions",
-        placeholder="Example:\nAdd a feature for push notifications for scheduled doctor visits, and ensure it is prioritized as High in Phase 1.",
-        key=f"edit_inst_{project['name']}",
-        height=100
+    # Initialize chat history inside project if not present
+    if 'chat_history' not in project:
+        project['chat_history'] = [
+            {
+                "role": "assistant", 
+                "content": f"Hello, I am your senior Product Manager. How can I help refine **{project['name']}** today?"
+            }
+        ]
+        
+    # Render scrollable Chat Container
+    chat_container = st.container(height=300, border=True)
+    with chat_container:
+        for msg in project['chat_history']:
+            if msg["role"] == "user":
+                st.chat_message("user").write(msg["content"])
+            else:
+                st.chat_message("assistant").write(msg["content"])
+                
+    # Multiline chat input
+    user_chat_input = st.text_area(
+        "Refine strategy / Ask a question",
+        placeholder="Type your instruction or question...",
+        key=f"chat_in_{project['name']}",
+        height=80,
+        label_visibility="collapsed"
     )
     
-    if st.button("Apply Changes", type="primary", key=f"apply_{project['name']}"):
-        if edit_instruction.strip():
-            with st.spinner("AI Workspace Editor applying updates..."):
-                try:
-                    updated_project = update_workspace(project, edit_instruction)
-                    st.session_state['projects'][project['name']] = updated_project
-                    st.success("Workspace updated successfully!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to apply changes: {e}")
-        else:
-            st.warning("Please provide a refinement instruction first.")
+    # Send Button
+    col1, col2 = st.columns([5, 1])
+    with col2:
+        if st.button("Send", type="primary", use_container_width=True, key=f"send_{project['name']}"):
+            if user_chat_input.strip():
+                # Save user message to history
+                project['chat_history'].append({"role": "user", "content": user_chat_input})
+                
+                with st.spinner("AI Product Manager analyzing..."):
+                    try:
+                        # Run PM refinement logic passing current history (excluding new message to act as history context)
+                        chat_result = chat_refine_workspace(
+                            workspace=project,
+                            chat_history=project['chat_history'][:-1],
+                            user_message=user_chat_input
+                        )
+                        
+                        # Save response to history
+                        project['chat_history'].append({
+                            "role": "assistant", 
+                            "content": chat_result["chat_response"]
+                        })
+                        
+                        # If deliverables were updated, replace them
+                        if chat_result.get("updated_tabs"):
+                            project['deliverables'] = chat_result["deliverables"]
+                            st.toast(f"Updated sections: {', '.join(chat_result['updated_tabs'])}")
+                            
+                        st.success("Refined successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error executing refinement: {e}")
+            else:
+                st.warning("Please enter a message first.")

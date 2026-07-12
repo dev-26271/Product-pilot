@@ -27,7 +27,6 @@ def render_sidebar() -> None:
                 st.session_state['active_project_id'] = proj_name
                 st.rerun()
                 
-        # Footer Action links
-        st.markdown("<div class='sidebar-section-header'>Workspace Settings</div>", unsafe_allow_html=True)
-        st.button("⚙️ Settings", key="settings_btn", use_container_width=True)
-        st.button("📚 Templates", key="templates_btn", use_container_width=True)
+        # Footer spacer
+        st.markdown("<div style='height: 2rem;'></div>", unsafe_allow_html=True)
+
