@@ -10,17 +10,20 @@ def render_project_configuration() -> Tuple[str, str, str, str, str, bool]:
         with col1:
             industry = st.selectbox(
                 "Industry",
-                options=["Healthcare", "Finance", "Education", "Retail", "Logistics", "Travel", "Real Estate", "HR", "Legal", "Entertainment", "Government", "Other"]
+                options=["Healthcare", "Finance", "Education", "Retail", "Logistics", "Travel", "Real Estate", "HR", "Legal", "Entertainment", "Government", "Other"],
+                key="cfg_industry"
             )
         with col2:
             product_type = st.selectbox(
                 "Product Type",
-                options=["SaaS Platform", "Mobile App", "AI Assistant", "Marketplace", "Dashboard", "Internal Tool", "API Platform", "Enterprise Software", "CRM", "Productivity Tool"]
+                options=["SaaS Platform", "Mobile App", "AI Assistant", "Marketplace", "Dashboard", "Internal Tool", "API Platform", "Enterprise Software", "CRM", "Productivity Tool"],
+                key="cfg_product_type"
             )
         with col3:
             audience = st.selectbox(
                 "Audience",
-                options=["B2B", "B2C", "Enterprise", "Internal", "Government"]
+                options=["B2B", "B2C", "Enterprise", "Internal", "Government"],
+                key="cfg_audience"
             )
             
         col4, col5, col6 = st.columns(3)
@@ -37,17 +40,19 @@ def render_project_configuration() -> Tuple[str, str, str, str, str, bool]:
                     "Jira Tasks",
                     "Product Roadmap",
                     "Executive Summary"
-                ]
+                ],
+                key="cfg_deliverable"
             )
         with col5:
             detail_level = st.selectbox(
                 "Detail Level",
                 options=["Basic", "Standard", "Comprehensive"],
-                index=1
+                index=1,
+                key="cfg_detail_level"
             )
         with col6:
             st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
-            include_risk = st.checkbox("Include Risk Analysis", value=True)
+            include_risk = st.checkbox("Include Risk Analysis", value=True, key="cfg_risk")
             
     return industry, product_type, audience, deliverable, detail_level, include_risk
 

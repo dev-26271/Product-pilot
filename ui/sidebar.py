@@ -9,6 +9,13 @@ def render_sidebar() -> None:
         if st.button("＋ New Project", key="new_proj_btn", use_container_width=True, type="secondary"):
             st.session_state['active_project_id'] = None
             st.session_state['idea_input'] = ""
+            # Reset all project configuration widgets to defaults
+            st.session_state['cfg_industry'] = "Healthcare"
+            st.session_state['cfg_product_type'] = "SaaS Platform"
+            st.session_state['cfg_audience'] = "B2B"
+            st.session_state['cfg_deliverable'] = "Product Requirements Document (PRD)"
+            st.session_state['cfg_detail_level'] = "Standard"
+            st.session_state['cfg_risk'] = True
             st.rerun()
             
         # Projects Section
