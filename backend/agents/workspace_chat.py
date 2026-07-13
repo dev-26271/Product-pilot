@@ -256,8 +256,31 @@ def apply_workspace_refinements(
     # 3. Log version history
     if "version_history" not in context.metadata:
         context.metadata["version_history"] = []
-    
+        
     new_version_num = len(context.metadata["version_history"]) + 1
+    
+    from backend.version_history import compute_workspace_diff, rebuild_workspace_version
+    
+    # Rebuild previous version to diff against
+    try:
+        old_ws = rebuild_workspace_version(context.metadata["version_history"], new_version_num - 1)
+    except Exception as e:
+        logger.error(f"Failed to rebuild previous version: {e}")
+        old_ws = {}
+        
+    # Find modified entities and documents from pending impact
+    pending_impact = context.metadata.get("pending_impact") or {}
+    modified_entities = [ent.get("id") if isinstance(ent, dict) else str(ent) for ent in pending_impact.get("affected_entities", [])]
+    changed_documents = pending_impact.get("affected_documents", [])
+    
+    # Validation status
+    val_report = context.metadata.get("validation_report", {})
+    val_status = {
+        "valid": val_report.get("valid", True),
+        "score": val_report.get("overall_score", 1.0),
+        "errors": val_report.get("errors", []),
+        "warnings": val_report.get("warnings", [])
+    }
     
     # Snapshot the complete context state, excluding circular / transient references
     snapshot_ctx = context.clone()
@@ -266,13 +289,31 @@ def apply_workspace_refinements(
     snapshot_ctx.metadata.pop("pending_impact", None)
     snapshot_dict = snapshot_ctx.to_dict()
     
-    version_entry = {
-        "version": new_version_num,
-        "description": instruction,
-        "timestamp": datetime.now().isoformat(),
-        "deliverables": copy.deepcopy(context.deliverables),
-        "snapshot": snapshot_dict
-    }
+    if old_ws:
+        delta = compute_workspace_diff(old_ws, snapshot_dict)
+        version_entry = {
+            "version": new_version_num,
+            "description": instruction,
+            "timestamp": datetime.now().isoformat(),
+            "modified_entities": modified_entities,
+            "changed_documents": changed_documents,
+            "validation_status": val_status,
+            "summary": f"Refinement: {instruction[:100]}...",
+            "delta": delta
+        }
+    else:
+        # Fallback to full snapshot
+        version_entry = {
+            "version": new_version_num,
+            "description": instruction,
+            "timestamp": datetime.now().isoformat(),
+            "modified_entities": modified_entities,
+            "changed_documents": changed_documents,
+            "validation_status": val_status,
+            "summary": f"Refinement: {instruction[:100]}...",
+            "snapshot": snapshot_dict
+        }
+        
     context.metadata["version_history"].append(version_entry)
     
     # 4. Log to Decision Log
