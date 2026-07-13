@@ -22,22 +22,42 @@ Analyze the user's message and follow these rules:
 - Reference existing entity IDs (e.g. BG-001, FT-001, FR-001, PE-001, US-001, JT-001). Never invent relationships or IDs.
 - If the workspace lacks enough information to answer a question or perform an analysis, explicitly state that.
 
-2. STRUCTURED RECOMMENDATIONS:
-When providing strategic recommendations or critique, you MUST structure your response (within the JSON chat_response string) to include the following sections (formatted as markdown):
-- **Reasoning**: Why you are making this recommendation (gap or opportunity).
-- **Business Impact**: Impact on KPIs, target values, and personas.
-- **Engineering Impact**: Impact on story points, developer tasks, or complexity.
-- **Risks**: Potential downstream risks or release risks.
-- **Recommendation**: Your concrete, actionable proposal.
-- **Confidence**: A numeric confidence rating between 0% and 100%.
+2. SPECIFIC SCENARIO INSTRUCTIONS:
+- Roadmap Explanation: Detail the phases, objectives, milestones, success metrics, and exit criteria in the Product Roadmap.
+- Project Summary: Synthesize the problem statement, SMART business goals, user personas, and core features.
+- Cost Estimation: Calculate a realistic team size, timeline, cloud infra, dev cost, and annual maintenance. All cost estimations and monetary figures MUST be in Indian Rupees (INR, symbol: ₹). State assumptions and confidence clearly.
+- Risk Analysis: Analyze risk factors from the PRD, business goals, and validation reports.
+- Scope Reduction: Recommend which features or requirements can be postponed to later roadmap phases.
+- Primary Users: Present the personas (goals, role, motivations, and workflow).
 
-3. CONVERSATIONAL VS. MODIFICATION CLASSIFICATION:
-- If the user's message is a conversational query, critique, or request for information (e.g., "Summarize this project", "Are there inconsistencies?", "Which requirements have weak ACs?", "Suggest MVP scope"), answer the user comprehensively and set "is_refinement" to false.
-- If the user explicitly requests changes, additions, deletions, or scope modifications (e.g., "Add subscription billing", "Remove drone delivery", "Change authentication to SSO"), explain the proposed changes and set "is_refinement" to true.
+3. SOURCE ATTRIBUTION:
+At the bottom of your response, always list the specific sources from the WorkspaceContext that you used to formulate your answer under a '**Source:**' header. Format as:
+**Source:**
+- [Deliverable Name] → [Specific Section or Entity ID]
+Example:
+**Source:**
+- PRD → Functional Requirements (FR-001)
+
+4. GREETINGS & PLACEHOLDERS FORBIDDEN:
+- NEVER output generic introductory sentences, greeting fluff (like "Sure, I can help you with...", "Hello! As a Senior PM..."), or placeholders like "I can help...".
+- Answer the query directly and professionally using the workspace.
+
+5. CONVERSATIONAL VS. MODIFICATION CLASSIFICATION:
+  - You must classify the user's query into one of these specific intent categories:
+    - 'Question': General questions, inquiries, or checks on workspace consistency.
+    - 'Summarize': Requests for a summary of the project, features, goals, or personas.
+    - 'Explain': Requests to explain the roadmap, system requirements, or features.
+    - 'Estimate Cost': Development cost, timeline, resource sizing, or annual cloud pricing.
+    - 'Modify PRD': User explicitly requests additions, edits, removals of functional/non-functional requirements or core features.
+    - 'Modify Roadmap': User requests changes to roadmap releases, quarters, or milestones.
+    - 'Modify User Stories': User requests custom updates or additions to user stories.
+  - Set the "intent" field in JSON to one of these category names.
+  - Set "is_refinement" to true ONLY if the intent is 'Modify PRD', 'Modify Roadmap', or 'Modify User Stories'. For informational intents ('Question', 'Summarize', 'Explain', 'Estimate Cost'), set "is_refinement" to false.
 
 You MUST respond ONLY with a raw JSON object matching the following structure:
 {
-  "chat_response": "Your professional PM response, formatted beautifully with markdown. If recommending, use the structured layout.",
+  "chat_response": "Your professional PM response, formatted beautifully with markdown. If recommending, use the structured layout. Must include a 'Source:' section at the bottom.",
+  "intent": "Question / Summarize / Explain / Estimate Cost / Modify PRD / Modify Roadmap / Modify User Stories",
   "is_refinement": true / false,
   "reasoning_trace": {
     "sources_consulted": ["Business Analysis", "PRD", "User Stories", "Validation Report"],
@@ -56,6 +76,134 @@ You MUST respond ONLY with a raw JSON object matching the following structure:
 Do not include markdown code fences (like ```json) or conversational text outside the JSON. Return only the valid JSON.
 """
 
+def _fallback_chat_response(context: WorkspaceContext, user_message: str) -> Dict[str, Any]:
+    """Generates a workspace-aware fallback response when the LLM call fails."""
+    msg = user_message.lower()
+    
+    # 1. Who are the primary users?
+    if "user" in msg or "persona" in msg:
+        personas = context.business_analysis.get("user_personas", [])
+        if not personas and "User Personas" in context.deliverables:
+            personas = context.deliverables.get("User Personas", {})
+        
+        if personas:
+            p_list = []
+            if isinstance(personas, list):
+                for p in personas:
+                    if isinstance(p, dict):
+                        name = p.get("name", "User")
+                        role = p.get("role", "")
+                        goals = ", ".join(p.get("goals", [])) if isinstance(p.get("goals"), list) else str(p.get("goals", ""))
+                        p_list.append(f"- **{name}** ({role}): Goals: {goals}")
+            elif isinstance(personas, dict) and "entities" in personas:
+                for p in personas.get("entities", {}).get("user_personas", []):
+                    name = p.get("name", "User")
+                    role = p.get("role", "")
+                    goals = ", ".join(p.get("goals", []))
+                    p_list.append(f"- **{name}** ({role}): Goals: {goals}")
+            elif isinstance(personas, dict) and "content" in personas:
+                content = personas.get("content", {})
+                for k, v in content.items():
+                    p_list.append(f"- **{k}**:\n{v}")
+            
+            if p_list:
+                return {
+                    "chat_response": "### Primary Users (Fallback Mode)\n\nHere are the primary users defined in the workspace:\n\n" + "\n".join(p_list) + "\n\n**Source:**\n- Business Analysis → User Personas",
+                    "is_refinement": False
+                }
+            
+    # 2. Explain this roadmap
+    if "roadmap" in msg:
+        roadmap = context.deliverables.get("Product Roadmap", {})
+        content = roadmap.get("content", {})
+        if content:
+            roadmap_md = "\n\n".join([f"**{k}**:\n{v}" for k, v in content.items()])
+            return {
+                "chat_response": f"### Product Roadmap (Fallback Mode)\n\n{roadmap_md}\n\n**Source:**\n- Roadmap → Content",
+                "is_refinement": False
+            }
+            
+    # 3. Development Cost Estimation
+    if "cost" in msg or "estimat" in msg or "budget" in msg:
+        features = context.intent_context.get("core_features", [])
+        num_features = len(features) if features else 3
+        team_size = max(3, num_features * 2)
+        timeline_months = max(3, num_features * 1.5)
+        # Assuming average developer rate of ₹1,50,000/month in INR
+        dev_cost = team_size * timeline_months * 150000
+        cloud_cost = timeline_months * 25000
+        maint_cost = dev_cost * 0.20
+        
+        return {
+            "chat_response": f"""### Development Cost Estimation (Fallback Mode)
+ 
+Based on the core features and scope in the active workspace, here is a preliminary cost estimation in Indian Rupees (INR):
+ 
+- **Estimated Team Size:** {team_size} members (Developers, PM, QA, Designer)
+- **Estimated Timeline:** {timeline_months:.1f} months
+- **Software Development Cost:** ₹{dev_cost:,.2f}
+- **Cloud Infrastructure Cost:** ₹{cloud_cost:,.2f} (during development)
+- **Annual Maintenance Cost:** ₹{maint_cost:,.2f}
+ 
+**Assumptions:**
+1. Mixed engineering team (average rate of ₹1,50,000/month per FTE).
+2. Clean integration APIs exist for any required external ERP or dependency systems.
+3. Standard cloud resources (AWS/GCP) hosting without high-end GPU or enterprise database licenses.
+ 
+*Confidence: 75%*
+ 
+**Source:**
+- Intent Context → Core Features""",
+            "is_refinement": False
+        }
+        
+    # 4. What risks do you see? / Analyze risks
+    if "risk" in msg:
+        prd = context.prd or {}
+        risk_list = []
+        if isinstance(prd, dict) and "Executive_Summary" in prd:
+            risk_list = prd.get("Executive_Summary", {}).get("risks", [])
+        
+        if not risk_list:
+            risk_list = ["Integration complexity with legacy ERP/EHR systems.", "User adoption friction during transition from manual flows."]
+            
+        r_str = "\n".join([f"- {r}" for r in risk_list])
+        return {
+            "chat_response": f"### Risk Analysis (Fallback Mode)\n\nHere are the active risks identified in the workspace deliverables:\n\n{r_str}\n\n**Source:**\n- PRD → Executive Summary (Risks)",
+            "is_refinement": False
+        }
+        
+    # 5. Summarize this project / Explain this project
+    if "summar" in msg or "explain" in msg or "project" in msg:
+        idea = context.idea
+        prob = context.business_analysis.get("problem_statement", {}).get("text", "") if isinstance(context.business_analysis, dict) else ""
+        goals = context.business_analysis.get("business_goals", []) if isinstance(context.business_analysis, dict) else []
+        g_list = [f"- Goal {g.get('id', 'BG-?')}: {g.get('goal')}" for g in goals if isinstance(g, dict) and g.get('goal')]
+        g_str = "\n".join(g_list)
+        return {
+            "chat_response": f"### Project Summary (Fallback Mode)\n\n**Product Idea:** {idea}\n\n**Problem:** {prob or idea}\n\n**Business Goals:**\n{g_str or '- Core product launch'}\n\n**Source:**\n- Business Analysis → Problem Statement & Goals",
+            "is_refinement": False
+        }
+        
+    # 6. Scope Reduction / Reduce MVP scope
+    if "reduce" in msg or "scope" in msg or "mvp" in msg:
+        features = context.intent_context.get("core_features", [])
+        if features:
+            postpone = features[-1]
+            keep = features[:-1]
+            keep_str = "\n".join([f"- {f}" for f in keep])
+            return {
+                "chat_response": f"### MVP Scope Reduction Recommendation (Fallback Mode)\n\nTo compress the timeline and reduce scope, I recommend keeping these core features in the MVP:\n{keep_str}\n\nAnd postponing this feature to Phase 2:\n- **{postpone}**\n\n**Source:**\n- Intent Context → Core Features",
+                "is_refinement": False
+            }
+            
+    # Default fallback
+    return {
+        "chat_response": f"### Workspace Assistant (Fallback Mode)\n\nI am currently operating in offline/fallback mode. Here are the details of the active workspace **{context.idea[:60]}...**:\n\n- **Project Idea:** {context.idea}\n- **PRD status:** {'Compiled' if context.prd else 'Not compiled'}\n- **Deliverables:** {', '.join(context.deliverables.keys()) if context.deliverables else 'None generated'}\n\n*Please let me know if you would like me to explain the roadmap, summarize the project, estimate costs, analyze risks, list primary users, or suggest scope reductions.*",
+        "is_refinement": False
+    }
+
+
 class WorkspaceChatAgent(BaseAgent):
     """Workspace Chat Agent that handles refinement requests or questions about deliverables."""
     
@@ -66,13 +214,83 @@ class WorkspaceChatAgent(BaseAgent):
         chat_history = kwargs.get("chat_history", [])
         user_message = kwargs.get("user_message", "")
         
-        # Format chat history context
-        history_str = ""
-        for msg in chat_history:
-            role = "User" if msg["role"] == "user" else "PM"
-            history_str += f"{role}: {msg['content']}\n"
+        # 1. Deterministic check for Undo / Restore Version History commands
+        import re
+        msg_lower = user_message.strip().lower()
+        is_undo = msg_lower in ["undo", "restore previous version", "go back", "revert", "restore version"]
+        target_ver = None
+        
+        match = re.search(r'restore version\s+(\d+)', msg_lower)
+        if match:
+            is_undo = True
+            target_ver = int(match.group(1))
             
-        # Assemble complete WorkspaceContext payload for the LLM
+        if is_undo:
+            version_history = context.metadata.get("version_history", [])
+            if not version_history:
+                chat_response = "### Undo Command (Fallback Mode)\n\nNo version history was found for this workspace."
+            else:
+                if target_ver is None:
+                    # Find previous version
+                    if len(version_history) > 1:
+                        target_ver = len(version_history) - 1
+                    else:
+                        chat_response = "### Undo Command (Fallback Mode)\n\nYou are currently at the first version of this workspace. Cannot undo further."
+                        
+                if target_ver is not None:
+                    from backend.version_history import rebuild_workspace_version, VersionControl
+                    try:
+                        restored_ws = rebuild_workspace_version(version_history, target_ver)
+                        if restored_ws:
+                            restored_ws = VersionControl.create_version(
+                                restored_ws,
+                                action=f"Rollback to Version {target_ver}",
+                                summary=f"Restored previous workspace state (Version {target_ver}) via chat command.",
+                                author="User"
+                            )
+                            # Update context with the restored state
+                            context.idea = restored_ws.get("idea", "")
+                            context.prd = restored_ws.get("prd", {})
+                            context.business_analysis = restored_ws.get("business_analysis", {})
+                            context.deliverables = restored_ws.get("deliverables", {})
+                            context.metadata = restored_ws.get("metadata", {})
+                            
+                            chat_response = f"### Workspace Restored (Version {target_ver})\n\nI have successfully restored the workspace state back to Version {target_ver}. All history has been preserved, and Version {len(version_history)} was created.\n\n**Source:**\n- Version History → Version {target_ver}"
+                        else:
+                            chat_response = f"### Undo Command (Fallback Mode)\n\nFailed to locate Version {target_ver} in the workspace history."
+                    except Exception as e:
+                        chat_response = f"### Undo Command (Fallback Mode)\n\nError restoring version {target_ver}: {e}"
+            
+            # Formulate the returned updated context
+            new_metadata = context.metadata.copy()
+            new_metadata["chat_response"] = chat_response
+            new_metadata.pop("pending_changes", None)
+            new_metadata.pop("pending_approval", None)
+            new_metadata.pop("pending_impact", None)
+            
+            # Standardize chat history storage
+            if "chat_history" not in new_metadata or not new_metadata["chat_history"]:
+                new_metadata["chat_history"] = list(chat_history)
+            new_metadata["chat_history"].append({"role": "user", "content": user_message})
+            new_metadata["chat_history"].append({
+                "role": "assistant", 
+                "content": chat_response,
+                "reasoning_trace": "Deterministic Undo / Rollback Handler"
+            })
+            
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            log_entry = {
+                "agent": "WorkspaceChatAgent",
+                "model": "Deterministic Undo Handler",
+                "latency_ms": duration_ms,
+                "tokens": 0,
+                "confidence": 1.0,
+                "timestamp": datetime.now().isoformat(),
+                "version": "3.0.0"
+            }
+            return context.clone(metadata=new_metadata).add_agent_log(log_entry)
+        
+        # Build prompt payload with active workspace context
         user_prompt = f"""=== ACTIVE WORKSPACE SPECS ===
 Product Idea: {context.idea}
 
@@ -94,43 +312,43 @@ Traceability Graph:
 Validation Results:
 {json.dumps(context.metadata.get("validation_report", {}), indent=2)}
 
-=== CONVERSATION HISTORY ===
-{history_str}
-
 === NEW USER MESSAGE ===
 User: {user_message}
 """
         
+        # Build messages block utilizing conversational memory blocks natively
         llm = get_llm()
         model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
         messages = [
-            ("system", ASK_PRODUCTPILOT_SYSTEM_PROMPT),
-            ("user", user_prompt)
+            ("system", ASK_PRODUCTPILOT_SYSTEM_PROMPT)
         ]
+        
+        for msg in chat_history:
+            role = msg["role"]
+            content = msg["content"]
+            if role == "user":
+                messages.append(("user", content))
+            elif role in ["assistant", "pm"]:
+                messages.append(("assistant", content))
+                
+        messages.append(("user", user_prompt))
         
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
             
-            if raw_text.startswith("```"):
-                lines = raw_text.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                raw_text = "\n".join(lines).strip()
+            if "```json" in raw_text:
+                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
                 
             result_data = json.loads(raw_text, strict=False)
         except Exception as e:
-            logger.error(f"Workspace Chat Agent LLM parse failed: {e}")
-            if 'raw_text' in locals():
-                logger.error(f"Raw text that failed parsing:\n{raw_text}")
-            result_data = {
-                "chat_response": "I can help you analyze, critique, or modify the project deliverables. Please ask me a question or suggest updates.",
-                "is_refinement": False
-            }
+            logger.error(f"Workspace Chat Agent LLM invoke or parse failed: {e}. Running fallback reasoning...")
+            result_data = _fallback_chat_response(context, user_message)
             
-        is_refinement = bool(result_data.get("is_refinement", False))
+        intent = result_data.get("intent", "Question")
+        is_refinement = intent in ["Modify PRD", "Modify Roadmap", "Modify User Stories"]
         chat_response = result_data.get("chat_response", "")
         
         new_metadata = context.metadata.copy()
@@ -141,7 +359,6 @@ User: {user_message}
             impact_agent = registry.get("impact_analysis")
             context = impact_agent.execute(context, instruction=user_message)
             new_metadata = context.metadata.copy()
-            # Clear legacy variables to prevent collisions
             new_metadata.pop("pending_changes", None)
             new_metadata.pop("pending_approval", None)
         else:
@@ -150,8 +367,8 @@ User: {user_message}
             new_metadata.pop("pending_approval", None)
             
         # Standardize chat history storage
-        if "chat_history" not in new_metadata:
-            new_metadata["chat_history"] = []
+        if "chat_history" not in new_metadata or not new_metadata["chat_history"]:
+            new_metadata["chat_history"] = list(chat_history)
         new_metadata["chat_history"].append({"role": "user", "content": user_message})
         new_metadata["chat_history"].append({
             "role": "assistant", 
@@ -167,7 +384,7 @@ User: {user_message}
             "tokens": len(raw_text) // 4 if 'raw_text' in locals() else 0,
             "confidence": 0.95,
             "timestamp": datetime.now().isoformat(),
-            "version": "2.0.0"
+            "version": "3.0.0"
         }
         
         return context.clone(
@@ -249,72 +466,21 @@ def apply_workspace_refinements(
     for key, (deliverable_name, agent_registry_key) in downstream_mappings.items():
         if affected_flags.get(key):
             if deliverable_name in context.deliverables:
-                logger.info(f"Regenerating downstream deliverable '{deliverable_name}' incrementally...")
+                logger.info(f"Refining downstream deliverable '{deliverable_name}' incrementally...")
                 agent = registry.get(agent_registry_key)
-                context = agent.execute(context)
+                context = agent.execute(context, mode="update", instruction=instruction)
                 
-    # 3. Log version history
-    if "version_history" not in context.metadata:
-        context.metadata["version_history"] = []
-        
-    new_version_num = len(context.metadata["version_history"]) + 1
-    
-    from backend.version_history import compute_workspace_diff, rebuild_workspace_version
-    
-    # Rebuild previous version to diff against
-    try:
-        old_ws = rebuild_workspace_version(context.metadata["version_history"], new_version_num - 1)
-    except Exception as e:
-        logger.error(f"Failed to rebuild previous version: {e}")
-        old_ws = {}
-        
-    # Find modified entities and documents from pending impact
-    pending_impact = context.metadata.get("pending_impact") or {}
-    modified_entities = [ent.get("id") if isinstance(ent, dict) else str(ent) for ent in pending_impact.get("affected_entities", [])]
-    changed_documents = pending_impact.get("affected_documents", [])
-    
-    # Validation status
-    val_report = context.metadata.get("validation_report", {})
-    val_status = {
-        "valid": val_report.get("valid", True),
-        "score": val_report.get("overall_score", 1.0),
-        "errors": val_report.get("errors", []),
-        "warnings": val_report.get("warnings", [])
-    }
-    
-    # Snapshot the complete context state, excluding circular / transient references
-    snapshot_ctx = context.clone()
-    snapshot_ctx.metadata.pop("pending_changes", None)
-    snapshot_ctx.metadata.pop("pending_approval", None)
-    snapshot_ctx.metadata.pop("pending_impact", None)
-    snapshot_dict = snapshot_ctx.to_dict()
-    
-    if old_ws:
-        delta = compute_workspace_diff(old_ws, snapshot_dict)
-        version_entry = {
-            "version": new_version_num,
-            "description": instruction,
-            "timestamp": datetime.now().isoformat(),
-            "modified_entities": modified_entities,
-            "changed_documents": changed_documents,
-            "validation_status": val_status,
-            "summary": f"Refinement: {instruction[:100]}...",
-            "delta": delta
-        }
-    else:
-        # Fallback to full snapshot
-        version_entry = {
-            "version": new_version_num,
-            "description": instruction,
-            "timestamp": datetime.now().isoformat(),
-            "modified_entities": modified_entities,
-            "changed_documents": changed_documents,
-            "validation_status": val_status,
-            "summary": f"Refinement: {instruction[:100]}...",
-            "snapshot": snapshot_dict
-        }
-        
-    context.metadata["version_history"].append(version_entry)
+    # 3. Log version history using VersionControl
+    from backend.version_history import VersionControl
+    context_dict = context.to_dict()
+    context_dict = VersionControl.create_version(
+        context_dict,
+        action="Refinement Applied",
+        summary=f"Refinement: {instruction}",
+        author="User"
+    )
+    context = WorkspaceContext.from_dict(context_dict)
+    new_version_num = len(context.metadata.get("version_history", []))
     
     # 4. Log to Decision Log
     if "decision_log" not in context.metadata:
@@ -337,13 +503,24 @@ def apply_workspace_refinements(
     context.metadata["entity_graph"] = engine.metadata.get("entity_graph", {})
     context.metadata["id_mappings"] = engine.metadata.get("id_mappings", {})
 
-    # Run Validation Agent to verify dependency integrity
-    validation_agent = registry.get("validation_agent")
-    try:
-        context = validation_agent.execute(context)
-        logger.info("Validation Agent successfully verified workspace integrity after refinement.")
-    except Exception as e:
-        logger.error(f"Validation Agent verification failed: {e}")
+    # Run Validation Agent conditionally: only for wide structural changes
+    num_affected = sum(1 for v in affected_flags.values() if v)
+    needs_semantic_val = (
+        affected_flags.get("business_analysis") or
+        affected_flags.get("roadmap") or
+        num_affected > 2
+    )
+    
+    if needs_semantic_val:
+        logger.info("Structural changes detected. Invoking ValidationAgent for semantic validation...")
+        validation_agent = registry.get("validation_agent")
+        try:
+            context = validation_agent.execute(context)
+            logger.info("Validation Agent successfully verified workspace integrity after refinement.")
+        except Exception as e:
+            logger.error(f"Validation Agent verification failed: {e}")
+    else:
+        logger.info("Minor edits detected. Skipping ValidationAgent semantic checks (deterministic validation only).")
 
     # Refresh planning analysis deterministically after refinements and validation
     try:

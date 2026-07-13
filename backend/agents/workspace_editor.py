@@ -53,13 +53,10 @@ class WorkspaceEditorAgent(BaseAgent):
             raw_text = response.content.strip()
             
             # Clean fences
-            if raw_text.startswith("```"):
-                lines = raw_text.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                raw_text = "\n".join(lines).strip()
+            if "```json" in raw_text:
+                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
                 
             updated_deliverables = json.loads(raw_text)
         except Exception as e:

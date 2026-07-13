@@ -13,6 +13,7 @@ from backend.agents.entity_schema import (
     FEATURE_REQUIRED, FUNCTIONAL_REQUIREMENT_REQUIRED
 )
 from rag import retrieve_product
+from backend.context_sanitizer import compress_business_analysis, compress_intent_context, compress_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +61,22 @@ class ProductManagerAgent(BaseAgent):
         # Step 2: Build user message
         t_prompt_start = time.perf_counter()
         profiler.start_sub("Prompt Construction")
-        user_message = f"""Product Context:
+        
+        comp_intent = compress_intent_context(intent)
+        comp_ba = compress_business_analysis(ba)
+        comp_meta = compress_metadata(context.metadata)
+        
+        user_message = f"""Product Context (RAG):
 {context_str}
 
-Intent Context (Canonical Source of Truth):
-{json.dumps(intent, indent=2)}
+Intent Context:
+{comp_intent}
 
 Business Analysis:
-{json.dumps(ba, indent=2)}
+{comp_ba}
+
+Project Metadata:
+{comp_meta}
 
 Current UTC timestamp: {datetime.now(timezone.utc).isoformat()}
 """
@@ -114,13 +123,10 @@ Return only the complete updated JSON.
             # Clean fences
             t_parse_start = time.perf_counter()
             profiler.start_sub("Response Parsing")
-            if raw_text.startswith("```"):
-                lines = raw_text.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                raw_text = "\n".join(lines).strip()
+            if "```json" in raw_text:
+                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
                 
             pm_json = json.loads(raw_text)
             profiler.end_sub("Response Parsing")

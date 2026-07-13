@@ -70,9 +70,8 @@ Current UTC timestamp: {datetime.now(timezone.utc).isoformat()}
             profiler.start_sub("Response Parsing")
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-            elif raw_text.startswith("```"):
-                lines = raw_text.splitlines()
-                raw_text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
             ba_json = json.loads(raw_text)
             profiler.end_sub("Response Parsing")
         except Exception as e:

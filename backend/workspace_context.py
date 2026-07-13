@@ -133,6 +133,9 @@ class WorkspaceContext:
                 "status": data.get("metadata", "Active")
             }
             
+        if "project_id" not in metadata:
+            metadata["project_id"] = data.get("name") or metadata.get("name") or (" ".join(data.get("idea", "").split()[:2]) + " Project")
+            
         return cls(
             idea=data.get("idea", ""),
             intent_context=data.get("intent_context", {}),

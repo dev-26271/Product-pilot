@@ -76,9 +76,8 @@ class SemanticValidationAgent(BaseAgent):
             profiler.start_sub("Response Parsing")
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-            elif raw_text.startswith("```"):
-                lines = raw_text.splitlines()
-                raw_text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
+            elif "```" in raw_text:
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
             val_json = json.loads(raw_text)
             profiler.end_sub("Response Parsing")
             val_timings["Response parsing"] = time.perf_counter() - t_parse_start

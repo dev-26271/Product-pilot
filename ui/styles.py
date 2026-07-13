@@ -3,373 +3,406 @@ import streamlit as st
 def load_custom_css():
     """Injects custom CSS to style the app as an enterprise product workspace."""
     st.markdown("""
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
-            /* Reset & Global overrides */
+            /* ── Design Tokens ─────────────────────────────────────── */
+            :root {
+                --bg-primary:    #0A0A0A;
+                --bg-surface:    #111111;
+                --bg-elevated:   #171717;
+                --bg-card:       #1A1A1A;
+                --border:        #222222;
+                --border-hover:  #333333;
+                --text-primary:  #F0F0F0;
+                --text-secondary:#9E9E9E;
+                --text-muted:    #6B7280;
+                --accent:        #4F8CFF;
+                --accent-hover:  #3B74E6;
+                --success:       #22C55E;
+                --warning:       #F59E0B;
+                --danger:        #EF4444;
+                --radius-sm:     6px;
+                --radius-md:     10px;
+                --radius-lg:     14px;
+                --font-family:   'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            }
+
+            /* ── Reset & Global ────────────────────────────────────── */
             .stApp {
-                background-color: #0A0A0A;
-                color: #F5F5F5;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background-color: var(--bg-primary);
+                color: var(--text-primary);
+                font-family: var(--font-family);
             }
 
-            /* Customizing Main Content Max-Width and centering */
             .block-container {
-                max-width: 1250px !important;
+                max-width: 1200px !important;
                 margin: 0 auto !important;
-                padding-left: 4rem !important;
-                padding-right: 4rem !important;
-                padding-top: 3.5rem !important;
-                padding-bottom: 3.5rem !important;
+                padding: 3rem 3.5rem !important;
             }
 
-            /* Force flex parent to center children horizontally (centered layout preservation) */
             [data-testid="stMain"] {
                 align-items: center !important;
-                transition: all 0.25s ease-in-out !important;
+                transition: all 0.2s ease !important;
             }
 
-            /* Sidebar Refinements & Correct Collapse Behaviour */
+            /* ── Sidebar ───────────────────────────────────────────── */
             [data-testid="stSidebar"] {
-                background-color: #111111 !important;
-                border-right: 1px solid #2A2A2A !important;
-                transition: min-width 0.25s, max-width 0.25s, width 0.25s !important;
+                background-color: var(--bg-surface) !important;
+                border-right: 1px solid var(--border) !important;
+                transition: min-width 0.2s, max-width 0.2s, width 0.2s !important;
             }
-            
+
             section[data-testid="stSidebar"][aria-expanded="true"] {
-                min-width: 260px !important;
-                max-width: 260px !important;
+                min-width: 250px !important;
+                max-width: 250px !important;
             }
-            
+
             section[data-testid="stSidebar"][aria-expanded="false"] {
                 min-width: 0px !important;
                 max-width: 0px !important;
                 width: 0px !important;
             }
-            
+
             .sidebar-title {
-                font-size: 1.15rem;
+                font-size: 1.1rem;
                 font-weight: 700;
-                color: #F5F5F5;
-                margin-bottom: 1.75rem;
+                color: var(--text-primary);
+                margin-bottom: 1.5rem;
                 padding-left: 0.5rem;
                 letter-spacing: -0.02em;
             }
 
             .sidebar-section-header {
-                font-size: 0.75rem;
+                font-size: 0.7rem;
                 text-transform: uppercase;
                 letter-spacing: 0.1em;
-                color: #6B7280;
-                margin-top: 1.5rem;
-                margin-bottom: 0.5rem;
+                color: var(--text-muted);
+                margin-top: 1.25rem;
+                margin-bottom: 0.4rem;
                 padding-left: 0.5rem;
                 font-weight: 700;
             }
 
-            /* Customizing Sidebar Buttons to look like flat menu lists with metadata support */
             div[data-testid="stSidebar"] div.stButton > button {
                 background-color: transparent !important;
                 border: 1px solid transparent !important;
-                color: #9E9E9E !important;
+                color: var(--text-secondary) !important;
                 text-align: left !important;
-                padding: 0.5rem 0.75rem !important;
-                font-size: 0.9rem !important;
+                padding: 0.45rem 0.65rem !important;
+                font-size: 0.85rem !important;
                 font-weight: 500 !important;
-                border-radius: 6px !important;
+                border-radius: var(--radius-sm) !important;
                 width: 100% !important;
                 display: flex;
                 justify-content: flex-start;
                 align-items: center;
-                transition: all 0.15s ease;
+                transition: all 0.12s ease;
                 white-space: pre-line !important;
                 line-height: 1.35 !important;
             }
-            
+
             div[data-testid="stSidebar"] div.stButton > button:hover {
-                background-color: #171717 !important;
-                color: #F5F5F5 !important;
-                border-color: #2A2A2A !important;
-            }
-            
-            div[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
-                background-color: #171717 !important;
-                border: 1px solid #2A2A2A !important;
-                color: #F5F5F5 !important;
+                background-color: var(--bg-elevated) !important;
+                color: var(--text-primary) !important;
+                border-color: var(--border) !important;
             }
 
-            /* Workspace Header / Hero Section Refinements */
+            div[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
+                background-color: var(--bg-elevated) !important;
+                border: 1px solid var(--border) !important;
+                color: var(--text-primary) !important;
+            }
+
+            /* ── Hero ──────────────────────────────────────────────── */
             .hero-badge {
-                font-size: 0.8rem;
+                font-size: 0.75rem;
                 text-transform: uppercase;
                 letter-spacing: 0.15em;
-                color: #4F8CFF;
+                color: var(--accent);
                 font-weight: 700;
-                margin-bottom: 0.5rem;
+                margin-bottom: 0.4rem;
                 display: inline-block;
             }
 
             .logo-title {
-                font-size: 4.5rem; /* ~72px */
+                font-size: 4rem;
                 font-weight: 800;
-                color: #F5F5F5;
-                margin-bottom: 0.25rem;
+                color: var(--text-primary);
+                margin-bottom: 0.2rem;
                 letter-spacing: -0.04em;
                 line-height: 1.05;
             }
 
             .tagline {
-                font-size: 1.15rem;
-                color: #9E9E9E;
+                font-size: 1.05rem;
+                color: var(--text-secondary);
                 font-weight: 400;
-                margin-bottom: 3.5rem;
+                margin-bottom: 3rem;
                 line-height: 1.5;
             }
 
-            /* Writing Canvas styling */
+            /* ── Writing Canvas ────────────────────────────────────── */
             .stTextArea textarea {
-                background-color: #111111 !important;
-                border: 1px solid #2A2A2A !important;
-                color: #F5F5F5 !important;
-                border-radius: 8px !important;
-                font-size: 1.1rem !important;
+                background-color: var(--bg-surface) !important;
+                border: 1px solid var(--border) !important;
+                color: var(--text-primary) !important;
+                border-radius: var(--radius-md) !important;
+                font-size: 1rem !important;
                 line-height: 1.6 !important;
-                padding: 1.25rem !important;
+                padding: 1.15rem !important;
                 transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
                 box-shadow: none !important;
             }
 
             .stTextArea textarea:focus {
-                border-color: #4F8CFF !important;
-                box-shadow: 0 0 0 1px #4F8CFF !important;
+                border-color: var(--accent) !important;
+                box-shadow: 0 0 0 1px var(--accent) !important;
             }
 
-            /* Canvas label formatting */
             .stTextArea label {
-                font-size: 1rem !important;
+                font-size: 0.95rem !important;
                 font-weight: 600 !important;
-                color: #F5F5F5 !important;
-                margin-bottom: 0.5rem !important;
+                color: var(--text-primary) !important;
+                margin-bottom: 0.35rem !important;
             }
 
-            /* Project Configuration Panel (Expander) */
+            /* ── Expanders ─────────────────────────────────────────── */
             div[data-testid="stExpander"] {
                 background-color: transparent !important;
-                border: 1px solid #2A2A2A !important;
-                border-radius: 8px !important;
-                margin-bottom: 1.75rem;
+                border: 1px solid var(--border) !important;
+                border-radius: var(--radius-md) !important;
+                margin-bottom: 1.25rem;
             }
 
             div[data-testid="stExpander"] summary {
                 font-weight: 600 !important;
-                color: #F5F5F5 !important;
-                font-size: 0.95rem !important;
-                padding: 0.75rem 1.25rem !important;
+                color: var(--text-primary) !important;
+                font-size: 0.9rem !important;
+                padding: 0.7rem 1.1rem !important;
             }
 
             div[data-testid="stExpander"] summary:hover {
-                background-color: #111111 !important;
+                background-color: var(--bg-surface) !important;
             }
 
-            /* Configuration Inputs */
+            /* ── Selects ───────────────────────────────────────────── */
             .stSelectbox > div > div > div {
-                background-color: #111111 !important;
-                border: 1px solid #2A2A2A !important;
-                color: #F5F5F5 !important;
-                border-radius: 6px !important;
-                font-size: 0.9rem !important;
+                background-color: var(--bg-surface) !important;
+                border: 1px solid var(--border) !important;
+                color: var(--text-primary) !important;
+                border-radius: var(--radius-sm) !important;
+                font-size: 0.85rem !important;
             }
 
             .stSelectbox label {
-                color: #9E9E9E !important;
-                font-size: 0.85rem !important;
+                color: var(--text-secondary) !important;
+                font-size: 0.8rem !important;
                 font-weight: 500 !important;
-                margin-bottom: 0.25rem !important;
+                margin-bottom: 0.2rem !important;
             }
 
             .stCheckbox span {
-                color: #9E9E9E !important;
-                font-size: 0.9rem !important;
+                color: var(--text-secondary) !important;
+                font-size: 0.85rem !important;
             }
 
-            /* Primary Action Button (Create Blueprint) with Arrow Slide Animation */
+            /* ── Primary Button ────────────────────────────────────── */
             div.stButton > button[kind="primary"] {
-                background-color: #4F8CFF !important;
+                background-color: var(--accent) !important;
                 color: #FFFFFF !important;
-                border: 1px solid #4F8CFF !important;
-                border-radius: 8px !important;
-                padding: 0.75rem 2rem !important;
-                font-size: 1.05rem !important;
+                border: 1px solid var(--accent) !important;
+                border-radius: var(--radius-md) !important;
+                padding: 0.7rem 1.75rem !important;
+                font-size: 0.95rem !important;
                 font-weight: 600 !important;
-                transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+                transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
                 box-shadow: none !important;
                 width: 100% !important;
             }
 
             div.stButton > button[kind="primary"]:hover {
-                background-color: #3b74e6 !important;
-                border-color: #3b74e6 !important;
+                background-color: var(--accent-hover) !important;
+                border-color: var(--accent-hover) !important;
                 transform: translateY(-1px);
-                padding-left: 2.25rem !important;
-                padding-right: 1.75rem !important;
             }
 
-            /* Suggestion Chips styling */
+            /* ── Suggestion Chips ──────────────────────────────────── */
             .chip-container {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 0.5rem;
-                margin-top: 0.75rem;
-                margin-bottom: 2rem;
+                gap: 0.4rem;
+                margin-top: 0.5rem;
+                margin-bottom: 1.5rem;
             }
 
-            /* Select all buttons inside example columns representing chips */
             div.chip-col div.stButton > button {
-                background-color: #111111 !important;
-                border: 1px solid #2A2A2A !important;
-                color: #9E9E9E !important;
-                font-size: 0.8rem !important;
-                padding: 0.35rem 0.75rem !important;
-                border-radius: 16px !important;
+                background-color: var(--bg-surface) !important;
+                border: 1px solid var(--border) !important;
+                color: var(--text-secondary) !important;
+                font-size: 0.78rem !important;
+                padding: 0.3rem 0.65rem !important;
+                border-radius: 14px !important;
                 text-align: center !important;
                 font-weight: 500 !important;
                 width: 100% !important;
-                transition: all 0.15s ease !important;
+                transition: all 0.12s ease !important;
             }
 
             div.chip-col div.stButton > button:hover {
-                border-color: #4F8CFF !important;
-                color: #F5F5F5 !important;
-                background-color: #171717 !important;
+                border-color: var(--accent) !important;
+                color: var(--text-primary) !important;
+                background-color: var(--bg-elevated) !important;
             }
 
-            /* Empty State */
+            /* ── Empty State ───────────────────────────────────────── */
             .empty-state {
                 text-align: center;
-                padding: 6.5rem 2rem;
-                color: #9E9E9E;
+                padding: 5rem 2rem;
+                color: var(--text-secondary);
             }
 
             .empty-icon {
-                font-size: 2.25rem;
+                font-size: 2rem;
                 display: block;
-                margin-bottom: 0.75rem;
-                opacity: 0.3;
+                margin-bottom: 0.6rem;
+                opacity: 0.25;
             }
 
             .empty-state h3 {
-                font-size: 1.2rem;
-                font-weight: 500;
-                color: #F5F5F5;
-                margin-bottom: 0.25rem;
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: var(--text-primary);
+                margin-bottom: 0.2rem;
             }
 
             .empty-state p {
-                font-size: 0.95rem;
-                color: #9E9E9E;
+                font-size: 0.88rem;
+                color: var(--text-secondary);
+                max-width: 400px;
+                margin: 0 auto;
             }
 
-            /* AI Progress Panel */
-            .progress-panel {
+            /* ── Step Progress Pipeline ────────────────────────────── */
+            .pipeline-step {
                 display: flex;
-                flex-direction: column;
-                gap: 1rem;
-                margin-top: 1.5rem;
-                margin-bottom: 1.5rem;
+                align-items: center;
+                gap: 0.6rem;
+                padding: 0.5rem 0;
+                font-size: 0.88rem;
+                font-weight: 500;
+                color: var(--text-muted);
+                transition: color 0.2s ease;
             }
 
-            .progress-card {
-                background-color: #111111;
-                border: 1px solid #2A2A2A;
-                border-radius: 8px;
-                padding: 1.25rem 1.5rem;
+            .pipeline-step.done {
+                color: var(--success);
             }
 
-            .progress-card.status-running {
-                border-color: #4F8CFF;
-                box-shadow: 0 0 12px rgba(79, 140, 255, 0.08);
+            .pipeline-step.running {
+                color: var(--accent);
             }
 
-            .progress-card.status-completed {
-                border-color: #22C55E;
+            .pipeline-step .step-icon {
+                font-size: 0.9rem;
+                width: 1.2rem;
+                text-align: center;
             }
 
-            .progress-card.status-waiting {
-                opacity: 0.45;
-            }
-
-            .agent-title {
-                font-size: 1rem;
-                font-weight: 600;
-                color: #F5F5F5;
-            }
-
-            .agent-status {
-                font-size: 0.85rem;
-                font-weight: 600;
-            }
-
-            .status-running .agent-status {
-                color: #4F8CFF;
-            }
-
-            .status-completed .agent-status {
-                color: #22C55E;
-            }
-
-            .status-waiting .agent-status {
-                color: #9E9E9E;
-            }
-
-            .agent-desc {
-                font-size: 0.85rem;
-                color: #9E9E9E;
-                margin-top: 0.35rem;
-            }
-
-            /* Document deliverable cards */
+            /* ── Document Cards ────────────────────────────────────── */
             .prd-section {
-                background-color: #171717;
-                border: 1px solid #2A2A2A;
-                border-radius: 10px;
-                padding: 1.75rem;
-                margin-bottom: 1.5rem;
+                background-color: var(--bg-elevated);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-md);
+                padding: 1.5rem;
+                margin-bottom: 1.25rem;
             }
 
             .prd-section-title {
-                font-size: 1.2rem;
+                font-size: 1.1rem;
                 font-weight: 700;
-                color: #F5F5F5;
-                margin-bottom: 1rem;
-                border-bottom: 1px solid #2A2A2A;
-                padding-bottom: 0.6rem;
+                color: var(--text-primary);
+                margin-bottom: 0.75rem;
+                border-bottom: 1px solid var(--border);
+                padding-bottom: 0.5rem;
             }
 
             .prd-section-content {
-                font-size: 0.95rem;
-                color: #9E9E9E;
+                font-size: 0.9rem;
+                color: var(--text-secondary);
                 line-height: 1.65;
             }
 
-            /* Tab Style override to match matte black workspace */
+            /* ── Tabs ──────────────────────────────────────────────── */
             div[data-baseweb="tab-list"] {
                 background-color: transparent !important;
-                border-bottom: 1px solid #2A2A2A !important;
-                gap: 1.5rem !important;
+                border-bottom: 1px solid var(--border) !important;
+                gap: 1.25rem !important;
             }
 
             div[data-baseweb="tab"] {
-                color: #9E9E9E !important;
+                color: var(--text-secondary) !important;
                 font-weight: 500 !important;
-                padding: 0.75rem 0.25rem !important;
+                padding: 0.65rem 0.2rem !important;
+                font-size: 0.88rem !important;
             }
 
             div[data-baseweb="tab"][aria-selected="true"] {
-                color: #4F8CFF !important;
-                border-bottom-color: #4F8CFF !important;
+                color: var(--accent) !important;
+                border-bottom-color: var(--accent) !important;
             }
 
+            /* ── Metric Card ───────────────────────────────────────── */
+            .metric-card {
+                background-color: var(--bg-card);
+                padding: 1.1rem 1.25rem;
+                border-radius: var(--radius-md);
+                border: 1px solid var(--border);
+            }
+            .metric-card .label {
+                font-size: 0.7rem;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                font-weight: 600;
+            }
+            .metric-card .value {
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: var(--text-primary);
+                margin-top: 0.35rem;
+                line-height: 1.2;
+            }
+            .metric-card .subtitle {
+                font-size: 0.78rem;
+                color: var(--text-muted);
+                margin-top: 0.2rem;
+            }
+
+            /* ── Knowledge File List ───────────────────────────────── */
+            .knowledge-file {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.35rem 0;
+                font-size: 0.82rem;
+                color: var(--text-secondary);
+            }
+            .knowledge-file .file-icon {
+                color: var(--text-muted);
+                font-size: 0.75rem;
+            }
+
+            /* ── Horizontal Rule ───────────────────────────────────── */
             hr {
-                border-top: 1px solid #2A2A2A !important;
-                margin: 4rem 0;
+                border-top: 1px solid var(--border) !important;
+                margin: 3rem 0;
+            }
+
+            /* ── Streamlit spinner override ─────────────────────────── */
+            .stSpinner > div {
+                border-top-color: var(--accent) !important;
             }
         </style>
     """, unsafe_allow_html=True)

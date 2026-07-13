@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 from backend.agent_registry import registry
 from backend.workspace_context import WorkspaceContext
-from backend.api import create_project
+
 
 # Force importing of agents package to trigger self-registration hooks
 import backend.agents
@@ -129,13 +129,10 @@ Rules:
             
             profiler.start_sub("Response Parsing")
             # Strip code fences if present
-            if raw.startswith("```"):
-                lines = raw.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                raw = "\n".join(lines).strip()
+            if "```json" in raw:
+                raw = raw.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw:
+                raw = raw.split("```")[1].split("```")[0].strip()
             
             data = json.loads(raw)
             profiler.end_sub("Response Parsing")
@@ -168,7 +165,7 @@ class OrchestrationStrategy(ABC):
     """Abstract Strategy interface for routing the multi-agent pipeline execution."""
     
     @abstractmethod
-    def execute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, payload: Dict[str, Any], progress_callback=None) -> Dict[str, Any]:
         """Runs the specific orchestration workflow logic."""
         pass
 
@@ -176,7 +173,7 @@ class OrchestrationStrategy(ABC):
 class PythonLocalStrategy(OrchestrationStrategy):
     """Runs the PRD-only pipeline locally using BaseAgent execution loops on WorkspaceContext."""
     
-    def execute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, payload: Dict[str, Any], progress_callback=None) -> Dict[str, Any]:
         logger.info("Executing PythonLocalStrategy (multi-agent context pipeline)...")
         from backend.profiler import PerformanceProfiler
         profiler = PerformanceProfiler.get_instance()
@@ -185,9 +182,11 @@ class PythonLocalStrategy(OrchestrationStrategy):
         
         project_data = payload.get("project", payload)
         idea = project_data.get("idea", "")
+        project_name = project_data.get("name") or (" ".join(idea.split()[:2]) + " Project")
         
         # UI selection overrides if manually configured
         pre_parsed_meta = {
+            "project_id": project_name,
             "industry": project_data.get("industry"),
             "product_type": project_data.get("product_type"),
             "audience": project_data.get("audience"),
@@ -209,39 +208,11 @@ class PythonLocalStrategy(OrchestrationStrategy):
         from pathlib import Path
         
         profiler.start("RAG Retrieval")
-        logger.info("Initializing orchestrator-owned RAG grounding context...")
-        base_dir = Path(__file__).resolve().parent.parent
+        logger.info(f"Initializing orchestrator-owned RAG grounding context for project '{project_name}'...")
         rag_service = RetrievalService(use_reranker=True)
         
-        # Attempt to load and merge FAISS indexes from disk (fast cache read)
-        try:
-            embeddings = get_embeddings()
-            store_b = FAISS.load_local(str(base_dir / "rag" / "vector_store" / "business"), embeddings, allow_dangerous_deserialization=True)
-            store_p = FAISS.load_local(str(base_dir / "rag" / "vector_store" / "product"), embeddings, allow_dangerous_deserialization=True)
-            store_b.merge_from(store_p)
-            
-            # Load uploaded document vector store if it exists
-            upload_store_path = base_dir / "rag" / "vector_store" / "uploads"
-            if upload_store_path.exists():
-                store_u = FAISS.load_local(str(upload_store_path), embeddings, allow_dangerous_deserialization=True)
-                store_b.merge_from(store_u)
-                
-            rag_service.vector_store = store_b
-            logger.info("RAG vector store loaded successfully from disk cache.")
-        except Exception as e:
-            logger.warning(f"Failed to load vector store from disk: {e}. Building index from source files...")
-            rag_service.ingest_documents(base_dir / "knowledge_base" / "business")
-            rag_service.ingest_documents(base_dir / "knowledge_base" / "product")
-            
-            # Include uploads directory if it exists
-            uploads_dir = base_dir / "knowledge_base" / "uploads"
-            if uploads_dir.exists():
-                rag_service.ingest_documents(uploads_dir)
-                
-            rag_service.build_vector_store()
-            
-        # Retrieve context (Retrieve 20, Rerank, return top 5)
-        grounding_chunks = rag_service.get_grounding_context(idea)
+        # Retrieve context (automatically loads, merges, and caches index inside RetrievalService)
+        grounding_chunks = rag_service.get_grounding_context(idea, project_id=project_name)
         
         # Populate context and pre-register in retrieve module
         context.rag_context = grounding_chunks
@@ -254,24 +225,31 @@ class PythonLocalStrategy(OrchestrationStrategy):
         profiler.end("RAG Retrieval")
         
         # 2. Step 1: Intent Extraction Agent
+        if progress_callback: progress_callback('Intent Extraction', 'running')
         intent_agent = registry.get("intent_extractor")
         profiler.start("Intent Extraction")
         context = intent_agent.execute(context, pre_parsed_metadata=pre_parsed_meta)
         profiler.end("Intent Extraction")
+        if progress_callback: progress_callback('Intent Extraction', 'done')
         
         # 3. Step 2: Business Analyst Agent
+        if progress_callback: progress_callback('Business Analysis', 'running')
         ba_agent = registry.get("business_analyst")
         profiler.start("Business Analyst")
         context = ba_agent.execute(context)
         profiler.end("Business Analyst")
+        if progress_callback: progress_callback('Business Analysis', 'done')
         
         # 4. Step 3: Product Manager Agent
+        if progress_callback: progress_callback('PRD Generation', 'running')
         pm_agent = registry.get("product_manager")
         profiler.start("Product Manager")
         context = pm_agent.execute(context)
         profiler.end("Product Manager")
+        if progress_callback: progress_callback('PRD Generation', 'done')
         
         # 5. Step 4: Deterministic Python Validation & Optional Semantic Audit
+        if progress_callback: progress_callback('Validation', 'running')
         from backend.validation.validator import DeterministicValidator
         validator = DeterministicValidator()
         
@@ -303,6 +281,7 @@ class PythonLocalStrategy(OrchestrationStrategy):
             validation_duration += (time.perf_counter() - t_sem_start)
             val_report = context.metadata.get("validation_report", val_report)
             
+        if progress_callback: progress_callback('Validation', 'done')
         profiler.set_duration("Validation", validation_duration)
         profiler.set_duration("Repair Loop", repair_duration)
                # Build and update entity_graph in context metadata
@@ -339,34 +318,8 @@ class PythonLocalStrategy(OrchestrationStrategy):
         print(summary_report)
         
         # Return serializable dict output maintaining backwards compatibility with UI
-        import copy
-        from datetime import datetime
-        if "version_history" not in context.metadata:
-            # Build initial snapshot dictionary
-            snapshot_ctx = context.clone()
-            snapshot_ctx.metadata.pop("pending_changes", None)
-            snapshot_ctx.metadata.pop("pending_approval", None)
-            snapshot_ctx.metadata.pop("pending_impact", None)
-            snapshot_dict = snapshot_ctx.to_dict()
-            
-            context.metadata["version_history"] = [
-                {
-                    "version": 1,
-                    "description": "Initial Multi-Agent Generation",
-                    "timestamp": datetime.now().isoformat(),
-                    "modified_entities": [],
-                    "changed_documents": ["PRD", "BRD", "SRS", "User Stories", "Roadmap", "Jira Tasks", "Sprint Backlog"],
-                    "validation_status": {
-                        "valid": True,
-                        "score": 1.0,
-                        "errors": [],
-                        "warnings": []
-                    },
-                    "summary": "Initial baseline product specifications generation.",
-                    "snapshot": snapshot_dict
-                }
-            ]
-            
+        if progress_callback: progress_callback('Ready', 'done')
+        
         res_dict = context.to_dict()
         res_dict["success"] = True
         res_dict["data"] = context.deliverables
@@ -375,42 +328,13 @@ class PythonLocalStrategy(OrchestrationStrategy):
         return res_dict
 
 
-class N8NWebhookStrategy(OrchestrationStrategy):
-    """Dispatches the payload to the external n8n webhook orchestration service."""
-    
-    def execute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info("Executing N8NWebhookStrategy...")
-        start_time = time.perf_counter()
-        
-        response = create_project(payload)
-        
-        duration = time.perf_counter() - start_time
-        logger.info(f"N8N Webhook orchestration pipeline completed in {duration:.4f} seconds.")
-        return response
 
-
-def generate_prd(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Resolves the configured strategy and executes the PRD-only initial generation.
-    
-    Acts as the public wrapper for backwards compatibility with UI rendering scripts.
-    """
-    mode = payload.get("mode")
-    if not mode:
-        env_val = os.getenv("USE_N8N", "").lower()
-        if env_val in ("true", "1", "yes"):
-            mode = "n8n"
-        else:
-            mode = "python"
-            
-    logger.info(f"Resolved orchestration mode: '{mode}'")
-    
-    if mode == "n8n":
-        strategy = N8NWebhookStrategy()
-    else:
-        strategy = PythonLocalStrategy()
-        
+def generate_prd(payload: Dict[str, Any], progress_callback=None) -> Dict[str, Any]:
+    """Executes the PRD-only initial generation using the local Python orchestration pipeline."""
+    logger.info("Executing local Python orchestration pipeline...")
+    strategy = PythonLocalStrategy()
     try:
-        return strategy.execute(payload)
+        return strategy.execute(payload, progress_callback=progress_callback)
     except Exception as e:
         logger.error(f"Orchestration execution failed: {e}")
         return {

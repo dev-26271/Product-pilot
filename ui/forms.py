@@ -58,21 +58,3 @@ def render_project_configuration() -> Tuple[str, str, str, str, str, bool]:
             
     return industry, product_type, audience, deliverable, detail_level, include_risk
 
-def render_execution_mode() -> str:
-    """Renders the Execution Mode strategy selector."""
-    with st.expander("Execution Mode", expanded=True):
-        st.markdown("<div style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1rem; margin-top: -0.5rem;'>Choose where the multi-agent orchestration pipeline executes.</div>", unsafe_allow_html=True)
-        
-        mode = st.radio(
-            "Execution Mode Selection",
-            options=["Python (Local)", "n8n Workflow"],
-            horizontal=True,
-            label_visibility="collapsed"
-        )
-        
-        if mode == "Python (Local)":
-            st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-top: 0.5rem; margin-bottom: 0px;'><strong>Python:</strong> Runs the complete multi-agent pipeline locally.</p>", unsafe_allow_html=True)
-            return "python"
-        else:
-            st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-top: 0.5rem; margin-bottom: 0px;'><strong>n8n:</strong> Runs the same pipeline through the n8n workflow.</p>", unsafe_allow_html=True)
-            return "n8n"

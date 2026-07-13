@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 from typing import Dict, Any, List
+from backend.formatters import format_inr_text
 
 
 def render_progress_panel(step: int, deliverable_name: str) -> None:
@@ -444,6 +445,15 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                                     
                                     # Cache updated deliverables content
                                     project['deliverables'][map_name]["content"] = updated_content
+                                    from backend.version_history import VersionControl
+                                    project = VersionControl.create_version(
+                                        project,
+                                        action=f"Refine {tab_name}",
+                                        summary=f"Refined deliverables: {refine_input}",
+                                        author="User"
+                                    )
+                                    active_id = st.session_state.get('active_project_id')
+                                    st.session_state['projects'][active_id] = project
                                     st.success(f"{tab_name} refined successfully!")
                                     st.rerun()
                                 except Exception as e:
@@ -452,15 +462,15 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                             st.warning("Please provide a refinement instruction.")
             else:
                 # Noncompiled State UI — shown when tab is opened but document not yet generated
-                st.markdown("<div style='height: 2.5rem;'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
                 st.markdown(f"""
-                    <div style='text-align: center; color: #9E9E9E; padding: 4rem 2rem; border: 1px dashed #2A2A2A; border-radius: 10px;'>
-                        <span style='font-size: 2rem; display: block; margin-bottom: 0.5rem;'>📄</span>
-                        <h4 style='color: #F5F5F5; font-weight: 500; margin-bottom: 0.25rem;'>This document hasn't been generated yet.</h4>
-                        <p style='font-size: 0.9rem;'>Generate it now?</p>
+                    <div class='empty-state' style='padding: 3rem 2rem; border: 1px dashed #222222; border-radius: 10px;'>
+                        <span class='empty-icon'>○</span>
+                        <h3>{tab_name} not generated</h3>
+                        <p>Click below to compile this document using the AI pipeline.</p>
                     </div>
                 """, unsafe_allow_html=True)
-                st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
                 
                 # Generate button — agent is ONLY called when user presses this
                 col_l, col_m, col_r = st.columns([1.5, 2, 1.5])
@@ -494,6 +504,17 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                                     project['deliverables'][map_name] = {
                                         "content": generated_content
                                     }
+                                
+                                # Log version update
+                                from backend.version_history import VersionControl
+                                project = VersionControl.create_version(
+                                    project,
+                                    action=f"Generate {tab_name}",
+                                    summary=f"Successfully generated {tab_name} deliverables via lazy compilation.",
+                                    author="ProductPilot"
+                                )
+                                active_id = st.session_state.get('active_project_id')
+                                st.session_state['projects'][active_id] = project
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Failed to generate {tab_name}: {e}")
@@ -536,7 +557,8 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
             role = msg["role"]
             content = msg["content"]
             with st.chat_message(role):
-                st.markdown(content)
+                display_content = format_inr_text(content) if role == "assistant" else content
+                st.markdown(display_content)
                 
                 # If Reasoning Trace is present in the assistant message, render it
                 trace = msg.get("reasoning_trace")
@@ -907,6 +929,7 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
                     
                     ts = ver["timestamp"][:19].replace("T", " ")
                     st.markdown(f"**Timestamp:** `{ts}`")
+                    st.markdown(f"**Author:** `{ver.get('author', 'ProductPilot')}`")
                     st.markdown(f"**Action:** `{ver['description']}`")
                     
                     summary = ver.get("summary") or ver.get("description")
@@ -974,15 +997,42 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
                         if removed_docs:
                             st.markdown(f"🔴 **Removed Documents in B:** {', '.join(removed_docs)}")
                             
-                        # Check modified documents
-                        modified_docs = []
+                        # Check modified documents and display line-by-line diffs
+                        import difflib
+                        import json
+                        
+                        st.markdown("### 📝 Changes Summary")
+                        has_diffs = False
                         for doc in common_docs:
-                            if ws_a["deliverables"][doc] != ws_b["deliverables"][doc]:
-                                modified_docs.append(doc)
+                            content_a = ws_a["deliverables"][doc].get("content", ws_a["deliverables"][doc])
+                            content_b = ws_b["deliverables"][doc].get("content", ws_b["deliverables"][doc])
+                            
+                            # Convert dict/list contents to JSON strings for comparison
+                            if isinstance(content_a, (dict, list)):
+                                str_a = json.dumps(content_a, indent=2)
+                            else:
+                                str_a = str(content_a)
                                 
-                        if modified_docs:
-                            st.markdown(f"🟡 **Modified Documents:** {', '.join(modified_docs)}")
-                        else:
+                            if isinstance(content_b, (dict, list)):
+                                str_b = json.dumps(content_b, indent=2)
+                            else:
+                                str_b = str(content_b)
+                                
+                            if str_a != str_b:
+                                has_diffs = True
+                                st.markdown(f"#### 📄 Diff for **{doc}**")
+                                diff_lines = list(difflib.unified_diff(
+                                    str_a.splitlines(),
+                                    str_b.splitlines(),
+                                    fromfile=f"Version {v_a}",
+                                    tofile=f"Version {v_b}",
+                                    lineterm=""
+                                ))
+                                if diff_lines:
+                                    diff_text = "\n".join(diff_lines)
+                                    st.code(diff_text, language="diff")
+                                    
+                        if not has_diffs:
                             st.markdown("⚪ **No document contents differed.**")
                             
                         # Compare validation scores
@@ -1013,20 +1063,14 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
                             # Rebuild and set as active project
                             restored_ws = rebuild_workspace_version(version_history, restore_ver_num)
                             
-                            # Append a rollback history entry
-                            new_version_num = len(version_history) + 1
-                            rollback_entry = {
-                                "version": new_version_num,
-                                "description": f"Rollback to Version {restore_ver_num}",
-                                "timestamp": datetime.now().isoformat(),
-                                "modified_entities": [],
-                                "changed_documents": [],
-                                "validation_status": restored_ws.get("metadata", {}).get("validation_report", {}),
-                                "summary": f"Restored workspace state back to historical Version {restore_ver_num}.",
-                                "snapshot": restored_ws
-                            }
-                            # Save version list into metadata
-                            restored_ws.setdefault("metadata", {})["version_history"] = version_history + [rollback_entry]
+                            # Log rollback version using VersionControl
+                            from backend.version_history import VersionControl
+                            restored_ws = VersionControl.create_version(
+                                restored_ws,
+                                action=f"Rollback to Version {restore_ver_num}",
+                                summary=f"Restored workspace state back to historical Version {restore_ver_num}.",
+                                author="User"
+                            )
                             
                             active_id = st.session_state.get('active_project_id')
                             st.session_state['projects'][active_id] = restored_ws
@@ -1038,44 +1082,79 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
 
 
 def render_knowledge_sources(project: Dict[str, Any]) -> None:
-    """Renders the Knowledge Sources expander panel, showing loaded files, chunk statistics, and enabling document uploads."""
+    """Renders the Knowledge Sources expander panel with separated ProductPilot vs Project knowledge."""
     import streamlit as st
     import time
     from pathlib import Path
-    from backend.agents.retrieval_service import RetrievalService
+    from backend.agents.retrieval_service import RetrievalService, sanitize_project_id
     from langchain_community.vectorstores import FAISS
     from rag.embeddings import get_embeddings
     
     base_dir = Path(__file__).resolve().parent.parent
-    uploads_dir = base_dir / "knowledge_base" / "uploads"
+    project_id = project.get("name", "ProductPilot_Project")
+    sanitized_id = sanitize_project_id(project_id)
+    
+    project_dir = base_dir / "knowledge_base" / "projects" / sanitized_id
+    uploads_dir = project_dir / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     
-    with st.expander("📚 Knowledge Grounding Sources", expanded=False):
-        st.markdown("<p style='font-size:0.85rem; color:#9E9E9E;'>Inspect the enterprise knowledge base and upload additional files to ground requirements generation.</p>", unsafe_allow_html=True)
-        
-        # 1. Display list of loaded knowledge base files
-        files_list = []
-        for kb_domain in ["business", "product", "uploads"]:
+    upload_store_path = project_dir / "vector_store"
+    
+    with st.expander("📚 Knowledge Grounding", expanded=False):
+        # Collect files
+        global_files = []
+        for kb_domain in ["business", "product"]:
             kb_path = base_dir / "knowledge_base" / kb_domain
             if kb_path.exists():
                 for f in kb_path.glob("*"):
                     if f.is_file() and f.suffix.lower() in [".pdf", ".md", ".txt", ".docx", ".json", ".csv"]:
-                        files_list.append((f.name, kb_domain))
+                        global_files.append(f.name)
                         
-        st.markdown("#### 📁 Active Knowledge Base Documents")
-        if files_list:
-            for name, domain in files_list:
-                st.markdown(f"📄 **{name}** (Folder: `{domain}`)")
-        else:
-            st.markdown("*No files loaded inside knowledge_base folders.*")
+        project_files = []
+        if uploads_dir.exists():
+            for f in uploads_dir.glob("*"):
+                if f.is_file() and f.suffix.lower() in [".pdf", ".md", ".txt", ".docx", ".json", ".csv"]:
+                    project_files.append(f.name)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"""
+                <div class='metric-card'>
+                    <div class='label'>📚 ProductPilot Knowledge</div>
+                    <div class='value'>{len(global_files)}</div>
+                    <div class='subtitle'>Global reference documents</div>
+                </div>
+            """, unsafe_allow_html=True)
+            st.markdown("<div style='height: 0.75rem;'></div>", unsafe_allow_html=True)
+            if global_files:
+                for name in global_files:
+                    st.markdown(f"<div class='knowledge-file'><span class='file-icon'>📄</span>{name}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("No global knowledge base files loaded.")
+                
+        with col2:
+            st.markdown(f"""
+                <div class='metric-card'>
+                    <div class='label'>📁 Project Knowledge</div>
+                    <div class='value'>{len(project_files)}</div>
+                    <div class='subtitle'>Project-specific uploads</div>
+                </div>
+            """, unsafe_allow_html=True)
+            st.markdown("<div style='height: 0.75rem;'></div>", unsafe_allow_html=True)
+            if project_files:
+                for name in project_files:
+                    st.markdown(f"<div class='knowledge-file'><span class='file-icon'>📎</span>{name}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("No project-specific documents uploaded yet.")
             
-        # 2. File Uploader component
+        # File Uploader
         st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
-        st.markdown("#### 📤 Upload Grounding Documents")
         uploaded_file = st.file_uploader(
-            "Upload PDF, DOCX, MD, TXT, JSON, or CSV to extend grounding context:",
+            "Upload PDF, DOCX, MD, TXT, JSON, or CSV to extend grounding context",
             type=["pdf", "docx", "md", "txt", "json", "csv"],
-            key=f"rag_uploader_{project['name']}"
+            key=f"rag_uploader_{project['name']}",
+            label_visibility="collapsed"
         )
         
         if uploaded_file is not None:
@@ -1083,24 +1162,23 @@ def render_knowledge_sources(project: Dict[str, Any]) -> None:
             with open(target_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
                 
-            st.success(f"File '{uploaded_file.name}' saved to uploads directory!")
+            st.success(f"'{uploaded_file.name}' saved to project knowledge.")
             
-            # Re-build vector index for uploaded documents dynamically
-            with st.spinner("Embedding document and rebuilding vector index..."):
+            with st.spinner("Embedding and indexing document..."):
                 try:
-                    embeddings = get_embeddings()
+                    RetrievalService.clear_cache(project_id=project_id)
                     rag_service = RetrievalService()
                     rag_service.ingest_documents(uploads_dir)
                     new_store = rag_service.build_vector_store()
                     
                     if new_store:
-                        upload_store_path = base_dir / "rag" / "vector_store" / "uploads"
+                        upload_store_path.parent.mkdir(parents=True, exist_ok=True)
                         new_store.save_local(str(upload_store_path))
-                        st.success("Successfully rebuilt grounding vector index!")
-                        time.sleep(1)
+                        st.success("Project knowledge index rebuilt.")
+                        time.sleep(0.5)
                         st.rerun()
                 except Exception as e:
-                    st.error(f"Error rebuilding vector store index: {e}")
+                    st.error(f"Indexing error: {e}")
 
 
 def render_rag_inspector() -> None:
@@ -1174,8 +1252,8 @@ def render_workspace_dashboard() -> None:
     metadata = project.get("metadata_context", {})
     planning = project.get("metadata", {}).get("planning_analysis", {})
     
-    st.markdown(f"<h2 style='color: #F5F5F5; font-weight: 800; margin-top: 1.5rem;'>📊 Workspace Dashboard: {project['name']}</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #9E9E9E; font-size: 0.9rem; margin-bottom: 2rem;'>Active planning metrics, maturity tracking, decision logs, execution queues, and version rollbacks.</p>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='color: #F0F0F0; font-weight: 800; margin-top: 1rem;'>📊 {project['name']}</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #9E9E9E; font-size: 0.85rem; margin-bottom: 1.5rem;'>Planning metrics, maturity tracking, decision logs, and version control.</p>", unsafe_allow_html=True)
     
     # 1. Metric Cards Row
     col1, col2, col3 = st.columns(3)
@@ -1183,23 +1261,22 @@ def render_workspace_dashboard() -> None:
     # Project Health
     val_report = metadata.get("validation_report", {})
     val_score = val_report.get("score", 1.0)
-    duration_ms = val_report.get("duration_ms", 41)
+    duration_ms = val_report.get("duration_ms", 0)
     
     if not val_report:
-        health_status = "Stable 🟢"
-        subtitle = "No validation report generated yet."
+        health_value = "Stable"
+        subtitle = "No validation report yet"
     else:
         is_valid = val_report.get("valid", True)
-        status_text = "Passed" if is_valid else "Failed"
-        health_status = f"✅ Structural Validation {status_text}" if is_valid else f"❌ Structural Validation {status_text}"
-        subtitle = f"{val_score*100:.0f}% | Validated in {duration_ms} ms"
+        health_value = f"{'✓' if is_valid else '✗'} {val_score*100:.0f}%"
+        subtitle = f"{'Passed' if is_valid else 'Issues found'} · {duration_ms}ms"
         
     with col1:
         st.markdown(f"""
-            <div style='background-color: #1E1E1E; padding: 1.2rem; border-radius: 6px; border: 1px solid #2A2A2A;'>
-                <div style='font-size: 0.8rem; color: #9CA3AF; text-transform: uppercase;'>Project Health</div>
-                <div style='font-size: 1.1rem; font-weight: 700; color: #F5F5F5; margin-top: 0.5rem;'>{health_status}</div>
-                <div style='font-size: 0.85rem; color: #10B981; margin-top: 0.25rem; font-weight: 600;'>{subtitle}</div>
+            <div class='metric-card'>
+                <div class='label'>Project Health</div>
+                <div class='value'>{health_value}</div>
+                <div class='subtitle'>{subtitle}</div>
             </div>
         """, unsafe_allow_html=True)
         
@@ -1207,10 +1284,10 @@ def render_workspace_dashboard() -> None:
     decisions_count = len(project.get("metadata", {}).get("decision_log", []))
     with col2:
         st.markdown(f"""
-            <div style='background-color: #1E1E1E; padding: 1.2rem; border-radius: 6px; border: 1px solid #2A2A2A;'>
-                <div style='font-size: 0.8rem; color: #9CA3AF; text-transform: uppercase;'>Logged Decisions</div>
-                <div style='font-size: 1.8rem; font-weight: 700; color: #F5F5F5; margin-top: 0.25rem;'>{decisions_count} Updates</div>
-                <div style='font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;'>Captured in Audit Trail</div>
+            <div class='metric-card'>
+                <div class='label'>Logged Decisions</div>
+                <div class='value'>{decisions_count}</div>
+                <div class='subtitle'>Captured in audit trail</div>
             </div>
         """, unsafe_allow_html=True)
         
@@ -1218,10 +1295,10 @@ def render_workspace_dashboard() -> None:
     active_version = len(project.get("metadata", {}).get("version_history", []))
     with col3:
         st.markdown(f"""
-            <div style='background-color: #1E1E1E; padding: 1.2rem; border-radius: 6px; border: 1px solid #2A2A2A;'>
-                <div style='font-size: 0.8rem; color: #9CA3AF; text-transform: uppercase;'>Workspace Version</div>
-                <div style='font-size: 1.8rem; font-weight: 700; color: #F5F5F5; margin-top: 0.25rem;'>v{active_version}.0</div>
-                <div style='font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;'>All history snapshotted</div>
+            <div class='metric-card'>
+                <div class='label'>Workspace Version</div>
+                <div class='value'>v{active_version}.0</div>
+                <div class='subtitle'>All history snapshotted</div>
             </div>
         """, unsafe_allow_html=True)
         
@@ -1829,8 +1906,8 @@ def render_jira_entities(tasks: List[Dict[str, Any]]) -> None:
 
 def render_export_center(project: Dict[str, Any]) -> None:
     """Renders the Export Center interface to configure and download file exports."""
-    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>📤 Workspace Export Center</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.5rem;'>Export your generated specifications, roadmaps, stories, and tasks into high-quality formats without regenerating any workspace documents.</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #F0F0F0; font-weight: 700; margin-bottom: 0.25rem;'>Export Center</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 0.82rem; color: #9E9E9E; margin-bottom: 1.25rem;'>Export documents into PDF, DOCX, Markdown, or JSON without regenerating.</p>", unsafe_allow_html=True)
     
     # 1. Select Export Scope
     scopes = [
@@ -1892,6 +1969,28 @@ def render_export_center(project: Dict[str, Any]) -> None:
                     st.error(f"Failed to read generated export: {e}")
             else:
                 st.error(f"Failed to export: {res.get('error')}")
+
+    # 4. Portable Workspace Backup Section
+    st.markdown("<hr style='border-color: #374151; margin-top: 2rem; margin-bottom: 2rem;'>", unsafe_allow_html=True)
+    st.markdown("#### 📦 Download Portable Workspace Backup (.json)")
+    st.markdown("<p style='font-size: 0.82rem; color: #9E9E9E;'>Generate a complete backup package of this workspace. This will include all generated deliverables, uploaded files, vector store index, and document manifest. You can restore this project on any other instance by uploading it via the sidebar.</p>", unsafe_allow_html=True)
+    
+    if st.button("Compile Backup Package", type="secondary", use_container_width=True):
+        with st.spinner("Packaging workspace artifacts and indexes..."):
+            try:
+                import json
+                pkg = ExportService.export_workspace_package(project)
+                pkg_json = json.dumps(pkg, indent=2, default=str)
+                st.success("Backup package compiled successfully!")
+                st.download_button(
+                    label="💾 Download Workspace Backup JSON",
+                    data=pkg_json,
+                    file_name=f"{project.get('name', 'Project')}_backup.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Failed to package workspace: {e}")
 
 
 

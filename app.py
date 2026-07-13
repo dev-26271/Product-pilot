@@ -3,6 +3,11 @@ from ui.styles import load_custom_css
 from ui.sidebar import render_sidebar
 from ui.home import render_home
 
+# Warm up embeddings model asynchronously at application startup
+import threading
+from rag.embeddings import get_embeddings
+threading.Thread(target=get_embeddings, daemon=True).start()
+
 # Configure page to wide layout for the enterprise workspace width
 st.set_page_config(
     page_title="ProductPilot Workspace",

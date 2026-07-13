@@ -99,11 +99,33 @@ class BaseDocumentAgent(BaseAgent):
                     
         # 2. Prompt construction
         profiler.start_sub("Prompt Construction")
-        user_message = self.build_user_message(context)
-        messages = [
-            ("system", self.system_prompt),
-            ("user", user_message)
-        ]
+        mode = kwargs.get("mode", "generate")
+        instruction = kwargs.get("instruction", "")
+        
+        if mode == "update" and self.deliverable_key in context.deliverables:
+            existing_doc = context.deliverables[self.deliverable_key]
+            existing_content = existing_doc.get("content", existing_doc)
+            
+            user_message = f"""=== EXISTING DOCUMENT ({self.deliverable_key}) ===
+{json.dumps(existing_content, indent=2)}
+
+=== REFINEMENT INSTRUCTION ===
+{instruction}
+
+Your task is to refine and update the existing document based on the refinement instruction.
+Output the complete updated document matching the exact schema structure of the original document. Output ONLY the raw JSON representation. Do not include markdown code fences, backticks, or conversational text.
+"""
+            system_prompt = f"You are a Technical Product Manager. Update this {self.deliverable_key} deliverable incrementally based on the user instructions. Do not rewrite unchanged elements. Maintain exact keys and structure."
+            messages = [
+                ("system", system_prompt),
+                ("user", user_message)
+            ]
+        else:
+            user_message = self.build_user_message(context)
+            messages = [
+                ("system", self.system_prompt),
+                ("user", user_message)
+            ]
         profiler.end_sub("Prompt Construction")
         
         # 3. LLM invocation

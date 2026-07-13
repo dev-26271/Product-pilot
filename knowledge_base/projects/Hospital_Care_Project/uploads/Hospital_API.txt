@@ -1,0 +1,1 @@
+Hospital API Spec: clinic patients records, EHR integration, HL7 schemas, and physician triage endpoints.

@@ -473,3 +473,122 @@ class ExportService:
                 for t in entities["tasks"]:
                     text = f"• <b>{t.get('id')}</b>: {t.get('title')} ({t.get('type')}) — <i>{t.get('priority')}</i>"
                     story.append(Paragraph(text, style_body))
+
+    @classmethod
+    def export_workspace_package(cls, workspace: Dict[str, Any]) -> Dict[str, Any]:
+        """Packages the workspace context, uploaded files, FAISS index, and manifest into a single JSON."""
+        import base64
+        from pathlib import Path
+        from backend.agents.retrieval_service import sanitize_project_id
+        
+        project_name = workspace.get("name", "ProductPilot_Project")
+        sanitized_id = sanitize_project_id(project_name)
+        
+        base_dir = Path(__file__).resolve().parent.parent
+        project_dir = base_dir / "knowledge_base" / "projects" / sanitized_id
+        uploads_dir = project_dir / "uploads"
+        vector_store_dir = project_dir / "vector_store"
+        
+        uploaded_files = {}
+        manifest = []
+        if uploads_dir.exists():
+            for f in uploads_dir.glob("*"):
+                if f.is_file() and f.suffix.lower() in [".pdf", ".md", ".txt", ".docx", ".json", ".csv"]:
+                    try:
+                        with open(f, "rb") as file_bin:
+                            encoded = base64.b64encode(file_bin.read()).decode("utf-8")
+                        uploaded_files[f.name] = encoded
+                        manifest.append({
+                            "name": f.name,
+                            "size_bytes": f.stat().st_size,
+                            "uploaded_at": datetime.fromtimestamp(f.stat().st_mtime, timezone.utc).isoformat()
+                        })
+                    except Exception as e:
+                        print(f"Failed to package file {f.name}: {e}")
+                        
+        vector_store_data = {}
+        if vector_store_dir.exists():
+            for f in vector_store_dir.glob("*"):
+                if f.is_file():
+                    try:
+                        with open(f, "rb") as vs_file:
+                            encoded = base64.b64encode(vs_file.read()).decode("utf-8")
+                        vector_store_data[f.name] = encoded
+                    except Exception as e:
+                        print(f"Failed to package vector store file {f.name}: {e}")
+                        
+        package = {
+            "version": "3.0.0",
+            "project_name": project_name,
+            "idea": workspace.get("idea", ""),
+            "industry": workspace.get("industry", ""),
+            "product_type": workspace.get("product_type", ""),
+            "audience": workspace.get("audience", ""),
+            "deliverables": workspace.get("deliverables", {}),
+            "metadata_context": workspace.get("metadata_context", {}),
+            "metadata": workspace.get("metadata", {}),
+            "agent_logs": workspace.get("agent_logs", []),
+            "uploaded_files": uploaded_files,
+            "vector_store_data": vector_store_data,
+            "manifest": manifest
+        }
+        return package
+
+    @classmethod
+    def import_workspace_package(cls, package: Dict[str, Any]) -> Dict[str, Any]:
+        """Restores a packaged workspace JSON, writing uploaded files and FAISS store to project-specific paths."""
+        import base64
+        from pathlib import Path
+        from backend.agents.retrieval_service import sanitize_project_id
+        
+        project_name = package.get("project_name")
+        if not project_name:
+            raise ValueError("Invalid workspace package: missing 'project_name'")
+            
+        sanitized_id = sanitize_project_id(project_name)
+        base_dir = Path(__file__).resolve().parent.parent
+        project_dir = base_dir / "knowledge_base" / "projects" / sanitized_id
+        uploads_dir = project_dir / "uploads"
+        vector_store_dir = project_dir / "vector_store"
+        
+        # Restore uploads
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        uploaded_files = package.get("uploaded_files", {})
+        for fname, b64_content in uploaded_files.items():
+            try:
+                content = base64.b64decode(b64_content)
+                with open(uploads_dir / fname, "wb") as f:
+                    f.write(content)
+            except Exception as e:
+                print(f"Failed to restore uploaded file {fname}: {e}")
+                
+        # Restore vector store files
+        vector_store_dir.mkdir(parents=True, exist_ok=True)
+        vs_data = package.get("vector_store_data", {})
+        for fname, b64_content in vs_data.items():
+            try:
+                content = base64.b64decode(b64_content)
+                with open(vector_store_dir / fname, "wb") as f:
+                    f.write(content)
+            except Exception as e:
+                print(f"Failed to restore vector store file {fname}: {e}")
+                
+        # Build workspace dictionary to return for session state load
+        workspace = {
+            "name": project_name,
+            "metadata": package.get("metadata", {}).get("last_updated", "Imported just now") if isinstance(package.get("metadata"), dict) else "Imported just now",
+            "idea": package.get("idea", ""),
+            "industry": package.get("industry", ""),
+            "product_type": package.get("product_type", ""),
+            "audience": package.get("audience", ""),
+            "deliverables": package.get("deliverables", {}),
+            "metadata_context": package.get("metadata_context", {}),
+            "metadata": package.get("metadata", {}),
+            "agent_logs": package.get("agent_logs", [])
+        }
+        
+        # Invalidate active project RAG cache
+        from backend.agents.retrieval_service import RetrievalService
+        RetrievalService.clear_cache(project_id=project_name)
+        
+        return workspace

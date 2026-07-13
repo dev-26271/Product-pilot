@@ -13,10 +13,34 @@ from rag.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
+def sanitize_project_id(project_id: str) -> str:
+    import re
+    # Replace spaces and special characters with underscores
+    sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '_', project_id)
+    return sanitized
+
 # Cache dictionary to avoid recomputing embeddings or re-running retrieval
 RETRIEVAL_CACHE: Dict[str, Any] = {}
 
 class RetrievalService:
+    _cached_global_store = None
+    _cached_global_documents = None
+    
+    _cached_project_stores = {}
+    _cached_project_documents = {}
+
+    @classmethod
+    def clear_cache(cls, project_id=None):
+        if project_id:
+            sanitized = sanitize_project_id(project_id)
+            cls._cached_project_stores.pop(sanitized, None)
+            cls._cached_project_documents.pop(sanitized, None)
+        else:
+            cls._cached_global_store = None
+            cls._cached_global_documents = None
+            cls._cached_project_stores.clear()
+            cls._cached_project_documents.clear()
+
     def __init__(self, use_reranker: bool = True):
         self.use_reranker = use_reranker
         self.documents: List[Dict[str, Any]] = []
@@ -133,6 +157,53 @@ class RetrievalService:
             
         return chunks
 
+    def load_vector_store_if_needed(self, base_dir: Path, project_id: str = None) -> float:
+        """Loads and merges global indexes with project-specific FAISS stores dynamically."""
+        t_start = time.perf_counter()
+        
+        # Load business & product fresh from disk to avoid in-memory pollution
+        embeddings = get_embeddings()
+        try:
+            store_b = FAISS.load_local(str(base_dir / "rag" / "vector_store" / "business"), embeddings, allow_dangerous_deserialization=True)
+            store_p = FAISS.load_local(str(base_dir / "rag" / "vector_store" / "product"), embeddings, allow_dangerous_deserialization=True)
+            store_b.merge_from(store_p)
+        except Exception as e:
+            logger.warning(f"Failed to load global indexes: {e}. Building mock store...")
+            # Fallback to a mock FAISS index if directories are missing
+            from langchain_core.documents import Document
+            store_b = FAISS.from_documents([Document(page_content="Global Business Grounding", metadata={"source": "mock"})], embeddings)
+            
+        # Ingest and merge project-specific uploads FAISS index if project_id is provided
+        if project_id:
+            sanitized_id = sanitize_project_id(project_id)
+            project_dir = base_dir / "knowledge_base" / "projects" / sanitized_id
+            project_store_path = project_dir / "vector_store"
+            
+            if project_store_path.exists():
+                try:
+                    store_u = FAISS.load_local(str(project_store_path), embeddings, allow_dangerous_deserialization=True)
+                    store_b.merge_from(store_u)
+                except Exception as e:
+                    logger.error(f"Failed to load project-specific vector store: {e}")
+            else:
+                # Fallback build from raw uploads folder if folder exists but no serialized index
+                project_uploads_dir = project_dir / "uploads"
+                if project_uploads_dir.exists() and list(project_uploads_dir.glob("*")):
+                    try:
+                        temp_service = RetrievalService()
+                        temp_service.ingest_documents(project_uploads_dir)
+                        if temp_service.documents:
+                            new_store = temp_service.build_vector_store()
+                            if new_store:
+                                project_store_path.parent.mkdir(parents=True, exist_ok=True)
+                                new_store.save_local(str(project_store_path))
+                                store_b.merge_from(new_store)
+                    except Exception as e:
+                        logger.error(f"Failed to dynamically compile project vector store: {e}")
+                        
+        self.vector_store = store_b
+        return time.perf_counter() - t_start
+
     def build_vector_store(self, store_path: Path = None):
         """Builds in-memory FAISS store from ingested documents."""
         if not self.documents:
@@ -153,6 +224,10 @@ class RetrievalService:
         duration = time.perf_counter() - start_time
         logger.info(f"Vector store built in {duration:.4f} seconds.")
         
+        # Also cache the newly built vector store
+        RetrievalService._cached_vector_store = self.vector_store
+        RetrievalService._cached_documents = self.documents
+        
         if store_path:
             store_path.parent.mkdir(parents=True, exist_ok=True)
             self.vector_store.save_local(str(store_path))
@@ -161,10 +236,6 @@ class RetrievalService:
 
     def retrieve(self, query: str, k: int = 20) -> List[Dict[str, Any]]:
         """Performs hybrid retrieval (Dense FAISS + Keyword index search) and merges results."""
-        cache_key = hashlib.md5(f"retrieve_{query}_{k}".encode("utf-8")).hexdigest()
-        if cache_key in RETRIEVAL_CACHE:
-            return RETRIEVAL_CACHE[cache_key]
-            
         logger.info(f"Retrieving grounded context for query: '{query[:50]}'")
         results = []
         
@@ -209,22 +280,20 @@ class RetrievalService:
         sorted_results = sorted(merged.values(), key=lambda x: x["confidence"], reverse=True)
         top_results = sorted_results[:k]
         
-        RETRIEVAL_CACHE[cache_key] = top_results
         return top_results
 
     def rerank(self, chunks: List[Dict[str, Any]], query: str, top_n: int = 5) -> List[Dict[str, Any]]:
         """Reranks top retrieved chunks using cosine similarity vector distances."""
-        cache_key = hashlib.md5(f"rerank_{query}_{len(chunks)}".encode("utf-8")).hexdigest()
-        if cache_key in RETRIEVAL_CACHE:
-            return RETRIEVAL_CACHE[cache_key]
-            
         logger.info(f"Reranking top {len(chunks)} chunks using embeddings model...")
         embeddings = get_embeddings()
         query_vector = embeddings.embed_query(query)
         
+        # Batched embeddings call to avoid sequential processing loop
+        texts = [r["content"] for r in chunks]
+        chunk_vectors = embeddings.embed_documents(texts)
+        
         reranked = []
-        for r in chunks:
-            chunk_vector = embeddings.embed_query(r["content"])
+        for r, chunk_vector in zip(chunks, chunk_vectors):
             import math
             dot = sum(a * b for a, b in zip(query_vector, chunk_vector))
             norm_q = math.sqrt(sum(a * a for a in query_vector))
@@ -238,12 +307,80 @@ class RetrievalService:
         reranked_sorted = sorted(reranked, key=lambda x: x["confidence"], reverse=True)
         best_results = reranked_sorted[:top_n]
         
-        RETRIEVAL_CACHE[cache_key] = best_results
         return best_results
 
-    def get_grounding_context(self, query: str) -> List[Dict[str, Any]]:
-        """Retrieves and reranks top grounding context."""
+    def get_grounding_context(self, query: str, project_id: str = None) -> List[Dict[str, Any]]:
+        """Retrieves and reranks top grounding context with step-by-step profiling."""
+        from backend.profiler import PerformanceProfiler
+        profiler = PerformanceProfiler.get_instance()
+        
+        # Record overall sub-timing for RAG Loading & Search
+        profiler.start_sub("RAG Loading & Search")
+        
+        # 1. Model Load
+        t_model_start = time.perf_counter()
+        embeddings = get_embeddings()
+        model_load_time = time.perf_counter() - t_model_start
+        
+        # 2. FAISS Load
+        base_dir = Path(__file__).resolve().parent.parent.parent
+        faiss_load_time = self.load_vector_store_if_needed(base_dir, project_id=project_id)
+        
+        # 3. Similarity Search
+        t_search_start = time.perf_counter()
         retrieved = self.retrieve(query, k=20)
-        if self.use_reranker:
-            return self.rerank(retrieved, query, top_n=5)
-        return retrieved[:5]
+        search_time = time.perf_counter() - t_search_start
+        
+        # 4. Reranking
+        t_rerank_start = time.perf_counter()
+        if self.use_reranker and retrieved:
+            reranked = self.rerank(retrieved, query, top_n=5)
+        else:
+            reranked = retrieved[:5]
+        rerank_time = time.perf_counter() - t_rerank_start
+        
+        # 5. Context Assembly
+        t_assembly_start = time.perf_counter()
+        final_context = reranked
+        assembly_time = time.perf_counter() - t_assembly_start
+        
+        profiler.end_sub("RAG Loading & Search")
+        
+        total_rag_time = model_load_time + faiss_load_time + search_time + rerank_time + assembly_time
+        
+        # Record timings inside PerformanceProfiler sub-timings
+        profiler.sub_timings["RAG Model Load"] = model_load_time
+        profiler.sub_timings["RAG FAISS Load"] = faiss_load_time
+        profiler.sub_timings["RAG Similarity Search"] = search_time
+        profiler.sub_timings["RAG Reranking"] = rerank_time
+        profiler.sub_timings["RAG Context Assembly"] = assembly_time
+        
+        def format_ms(seconds: float) -> str:
+            ms = seconds * 1000.0
+            if ms == 0:
+                return "0 ms"
+            elif ms < 0.1:
+                return f"{ms:.3f} ms"
+            elif ms < 1.0:
+                return f"{ms:.2f} ms"
+            elif ms < 10.0:
+                return f"{ms:.1f} ms"
+            else:
+                return f"{ms:.0f} ms"
+        
+        # Print RAG Performance Timing Report to logs & stdout
+        report = f"""
+RAG Performance
+---------------
+Model Load ............ {format_ms(model_load_time)}
+FAISS Load ............ {format_ms(faiss_load_time)}
+Similarity Search ..... {format_ms(search_time)}
+Reranking ............. {format_ms(rerank_time)}
+Context Assembly ...... {format_ms(assembly_time)}
+
+Total ................. {format_ms(total_rag_time)}
+"""
+        logger.info(report)
+        print(report)
+        
+        return final_context
