@@ -16,7 +16,11 @@ if 'projects' not in st.session_state:
     st.session_state['projects'] = {
         "Healthcare AI": {
             "name": "Healthcare AI",
-            "metadata": "Updated 2h ago",
+            "metadata": {
+                "last_updated": "Updated 2h ago",
+                "chat_history": [],
+                "version_history": []
+            },
             "idea": "Build a healthcare platform where patients can consult doctors online, manage prescriptions, schedule appointments, and receive AI-powered health recommendations.",
             "industry": "Healthcare",
             "product_type": "Mobile Application",
@@ -46,7 +50,11 @@ if 'projects' not in st.session_state:
         },
         "Food Delivery Platform": {
             "name": "Food Delivery Platform",
-            "metadata": "Updated 1d ago",
+            "metadata": {
+                "last_updated": "Updated 1d ago",
+                "chat_history": [],
+                "version_history": []
+            },
             "idea": "A hyper-local food delivery marketplace optimized for eco-friendly drone shipping and zero-waste packaging.",
             "industry": "Retail",
             "product_type": "Marketplace",
@@ -62,7 +70,11 @@ if 'projects' not in st.session_state:
         },
         "CRM SaaS": {
             "name": "CRM SaaS",
-            "metadata": "Draft",
+            "metadata": {
+                "last_updated": "Draft",
+                "chat_history": [],
+                "version_history": []
+            },
             "idea": "A privacy-first CRM SaaS designed for security-conscious enterprise teams with local-first syncing and end-to-end encryption.",
             "industry": "Finance",
             "product_type": "SaaS Platform",
@@ -71,7 +83,11 @@ if 'projects' not in st.session_state:
         },
         "Student Assistant": {
             "name": "Student Assistant",
-            "metadata": "Draft",
+            "metadata": {
+                "last_updated": "Draft",
+                "chat_history": [],
+                "version_history": []
+            },
             "idea": "An offline-first study companion utilizing localized LLMs for private research, summarizing, and flashcard generation.",
             "industry": "Education",
             "product_type": "Productivity Tool",

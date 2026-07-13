@@ -492,8 +492,9 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
     st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.5rem;'>Collaborate with a Senior Product Manager to understand, critique, explain, and incrementally modify your workspace deliverables. Ask questions, analyze tradeoffs, or request changes.</p>", unsafe_allow_html=True)
 
     # 1. Initialize metadata lists if not present
-    if "metadata" not in project:
-        project["metadata"] = {}
+    if "metadata" not in project or not isinstance(project["metadata"], dict):
+        last_updated = project.get("metadata") if isinstance(project.get("metadata"), str) else "Updated just now"
+        project["metadata"] = {"last_updated": last_updated}
     if "chat_history" not in project["metadata"]:
         project["metadata"]["chat_history"] = []
     if "version_history" not in project["metadata"]:
@@ -1619,7 +1620,14 @@ def render_prd_entities(prd_data: Dict[str, Any]) -> None:
             fdesc = f.get("description", "")
             fpersona = f.get("user_persona") or f.get("user_persona_mapping", "N/A")
             fval = f.get("business_value") or "N/A"
-            fmetrics = ", ".join(f.get("success_metrics", []))
+            
+            fmetrics_raw = f.get("success_metrics") or f.get("success_metric") or []
+            if isinstance(fmetrics_raw, str):
+                fmetrics = fmetrics_raw
+            elif isinstance(fmetrics_raw, list):
+                fmetrics = ", ".join(fmetrics_raw)
+            else:
+                fmetrics = "N/A"
             
             with st.expander(f"⚙️ {fid} — {fname} ({f.get('priority', 'Medium')})"):
                 st.markdown(f"""
@@ -1639,10 +1647,27 @@ def render_prd_entities(prd_data: Dict[str, Any]) -> None:
         st.markdown("### ⚙️ Functional Requirements")
         for fr in frs:
             frid = fr.get("id", "FR-XXX")
-            title = fr.get("title", "Requirement")
+            title = fr.get("title") or fr.get("name") or "Requirement"
             desc = fr.get("description", "")
+            
             ac_list = fr.get("acceptance_criteria", [])
+            if isinstance(ac_list, str):
+                ac_list = [ac_list]
+            elif not isinstance(ac_list, list):
+                ac_list = []
             ac_str = "".join(f"<li>{ac}</li>" for ac in ac_list)
+            
+            edge_cases = fr.get('edge_cases', [])
+            if isinstance(edge_cases, str):
+                edge_cases = [edge_cases]
+            elif not isinstance(edge_cases, list):
+                edge_cases = []
+                
+            deps = fr.get('dependencies', [])
+            if isinstance(deps, str):
+                deps = [deps]
+            elif not isinstance(deps, list):
+                deps = []
             
             with st.expander(f"📋 {frid} — {title} ({fr.get('priority', 'Medium')})"):
                 st.markdown(f"""
@@ -1651,11 +1676,12 @@ def render_prd_entities(prd_data: Dict[str, Any]) -> None:
                         <strong>Acceptance Criteria:</strong>
                         <ul style='margin-top: 0.2rem; padding-left: 1.2rem;'>{ac_str or '<li>N/A</li>'}</ul>
                         <strong>Business Value:</strong> {fr.get('business_value', 'N/A')}<br>
-                        <strong>User Persona:</strong> {fr.get('user_persona', 'N/A')}<br>
-                        <strong>Edge Cases:</strong> {", ".join(fr.get('edge_cases', [])) or 'None'}<br>
-                        <strong>Dependencies:</strong> {", ".join(fr.get('dependencies', [])) or 'None'}<br>
+                        <strong>User Persona:</strong> {fr.get('user_persona') or fr.get('user_persona_mapping', 'N/A')}<br>
+                        <strong>Edge Cases:</strong> {", ".join(edge_cases) or 'None'}<br>
+                        <strong>Dependencies:</strong> {", ".join(deps) or 'None'}<br>
                     </div>
                 """, unsafe_allow_html=True)
+
                 
     # Non-Functional Requirements
     nfrs = prd_data.get("Non_Functional_Requirements", {})

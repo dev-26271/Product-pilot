@@ -191,6 +191,13 @@ def render_home() -> None:
     else:
         # Mode B: Persistent Active Project Workspace
         project = st.session_state['projects'][active_id]
+        if "metadata" not in project or not isinstance(project["metadata"], dict):
+            last_updated = project.get("metadata") if isinstance(project.get("metadata"), str) else "Updated just now"
+            project["metadata"] = {
+                "last_updated": last_updated,
+                "chat_history": [],
+                "version_history": []
+            }
         render_project_header(project)
         render_knowledge_sources(project)
         render_project_deliverables(project)
