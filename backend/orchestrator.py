@@ -177,6 +177,57 @@ class PythonLocalStrategy(OrchestrationStrategy):
             metadata=pre_parsed_meta.copy()
         )
         
+        # --- KNOWLEDGE GROUNDING LAYER (ENTERPRISE RAG) ---
+        from backend.agents.retrieval_service import RetrievalService
+        from rag.embeddings import get_embeddings
+        from langchain_community.vectorstores import FAISS
+        from langchain_core.documents import Document
+        import rag.retriever
+        from pathlib import Path
+        
+        logger.info("Initializing orchestrator-owned RAG grounding context...")
+        base_dir = Path(__file__).resolve().parent.parent
+        rag_service = RetrievalService(use_reranker=True)
+        
+        # Attempt to load and merge FAISS indexes from disk (fast cache read)
+        try:
+            embeddings = get_embeddings()
+            store_b = FAISS.load_local(str(base_dir / "rag" / "vector_store" / "business"), embeddings, allow_dangerous_deserialization=True)
+            store_p = FAISS.load_local(str(base_dir / "rag" / "vector_store" / "product"), embeddings, allow_dangerous_deserialization=True)
+            store_b.merge_from(store_p)
+            
+            # Load uploaded document vector store if it exists
+            upload_store_path = base_dir / "rag" / "vector_store" / "uploads"
+            if upload_store_path.exists():
+                store_u = FAISS.load_local(str(upload_store_path), embeddings, allow_dangerous_deserialization=True)
+                store_b.merge_from(store_u)
+                
+            rag_service.vector_store = store_b
+            logger.info("RAG vector store loaded successfully from disk cache.")
+        except Exception as e:
+            logger.warning(f"Failed to load vector store from disk: {e}. Building index from source files...")
+            rag_service.ingest_documents(base_dir / "knowledge_base" / "business")
+            rag_service.ingest_documents(base_dir / "knowledge_base" / "product")
+            
+            # Include uploads directory if it exists
+            uploads_dir = base_dir / "knowledge_base" / "uploads"
+            if uploads_dir.exists():
+                rag_service.ingest_documents(uploads_dir)
+                
+            rag_service.build_vector_store()
+            
+        # Retrieve context (Retrieve 20, Rerank, return top 5)
+        grounding_chunks = rag_service.get_grounding_context(idea)
+        
+        # Populate context and pre-register in retrieve module
+        context.rag_context = grounding_chunks
+        lc_docs = [
+            Document(page_content=chunk["content"], metadata=chunk["metadata"])
+            for chunk in grounding_chunks
+        ]
+        rag.retriever.ACTIVE_GROUNDING_CONTEXT = lc_docs
+        logger.info(f"Grounded workspace context with {len(lc_docs)} chunks.")
+        
         # 2. Step 1: Intent Extraction Agent
         intent_agent = registry.get("intent_extractor")
         context = intent_agent.execute(context, pre_parsed_metadata=pre_parsed_meta)

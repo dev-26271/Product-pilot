@@ -574,4 +574,126 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
             )
 
 
+def render_knowledge_sources(project: Dict[str, Any]) -> None:
+    """Renders the Knowledge Sources expander panel, showing loaded files, chunk statistics, and enabling document uploads."""
+    import streamlit as st
+    import time
+    from pathlib import Path
+    from backend.agents.retrieval_service import RetrievalService
+    from langchain_community.vectorstores import FAISS
+    from rag.embeddings import get_embeddings
+    
+    base_dir = Path(__file__).resolve().parent.parent
+    uploads_dir = base_dir / "knowledge_base" / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    
+    with st.expander("📚 Knowledge Grounding Sources", expanded=False):
+        st.markdown("<p style='font-size:0.85rem; color:#9E9E9E;'>Inspect the enterprise knowledge base and upload additional files to ground requirements generation.</p>", unsafe_allow_html=True)
+        
+        # 1. Display list of loaded knowledge base files
+        files_list = []
+        for kb_domain in ["business", "product", "uploads"]:
+            kb_path = base_dir / "knowledge_base" / kb_domain
+            if kb_path.exists():
+                for f in kb_path.glob("*"):
+                    if f.is_file() and f.suffix.lower() in [".pdf", ".md", ".txt", ".docx", ".json", ".csv"]:
+                        files_list.append((f.name, kb_domain))
+                        
+        st.markdown("#### 📁 Active Knowledge Base Documents")
+        if files_list:
+            for name, domain in files_list:
+                st.markdown(f"📄 **{name}** (Folder: `{domain}`)")
+        else:
+            st.markdown("*No files loaded inside knowledge_base folders.*")
+            
+        # 2. File Uploader component
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        st.markdown("#### 📤 Upload Grounding Documents")
+        uploaded_file = st.file_uploader(
+            "Upload PDF, DOCX, MD, TXT, JSON, or CSV to extend grounding context:",
+            type=["pdf", "docx", "md", "txt", "json", "csv"],
+            key=f"rag_uploader_{project['name']}"
+        )
+        
+        if uploaded_file is not None:
+            target_path = uploads_dir / uploaded_file.name
+            with open(target_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+                
+            st.success(f"File '{uploaded_file.name}' saved to uploads directory!")
+            
+            # Re-build vector index for uploaded documents dynamically
+            with st.spinner("Embedding document and rebuilding vector index..."):
+                try:
+                    embeddings = get_embeddings()
+                    rag_service = RetrievalService()
+                    rag_service.ingest_documents(uploads_dir)
+                    new_store = rag_service.build_vector_store()
+                    
+                    if new_store:
+                        upload_store_path = base_dir / "rag" / "vector_store" / "uploads"
+                        new_store.save_local(str(upload_store_path))
+                        st.success("Successfully rebuilt grounding vector index!")
+                        time.sleep(1)
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error rebuilding vector store index: {e}")
+
+
+def render_rag_inspector() -> None:
+    """Renders the dedicated diagnostic RAG Inspector Page with retrieval scores and citations."""
+    import streamlit as st
+    
+    st.markdown("<h2 style='color: #F5F5F5; font-weight: 600; margin-top: 1.5rem;'>🔍 RAG Grounding Inspector</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #9E9E9E; font-size: 0.9rem; margin-bottom: 2rem;'>Inspect similarities, hybrid dense/keyword retrieval scores, cross-encoder rerank metrics, and citation sources.</p>", unsafe_allow_html=True)
+    
+    active_id = st.session_state.get('active_project_id')
+    if active_id is None:
+        st.warning("Please select or generate a project first to inspect its grounding context.")
+        return
+        
+    project = st.session_state['projects'][active_id]
+    rag_context = project.get("rag_context", [])
+    
+    if not rag_context:
+        st.info("No grounding context has been retrieved yet for this project. Generate deliverables to run grounding.")
+        return
+        
+    st.markdown(f"""
+        <div style='background-color: #1A1A1A; border: 1px solid #2A2A2A; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;'>
+            <strong>Grounding Target:</strong> {project['idea']}<br>
+            <strong>Total Grounded Chunks:</strong> {len(rag_context)} sources mapped.
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("### 📊 Retrieved Chunks & Rerank Scores")
+    for idx, chunk in enumerate(rag_context):
+        confidence = chunk.get("confidence", 0.0)
+        source = chunk.get("metadata", {}).get("source", "Unknown Source")
+        doc_type = chunk.get("metadata", {}).get("document_type", "txt")
+        page = chunk.get("metadata", {}).get("page", 1)
+        source_type = chunk.get("source_type", "dense")
+        chunk_id = chunk.get("metadata", {}).get("chunk_id", "N/A")
+        
+        st.markdown(f"""
+            <div style='background-color: #1E1E1E; border-left: 4px solid #4F8CFF; padding: 1.2rem; border-radius: 6px; margin-bottom: 1rem;'>
+                <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;'>
+                    <strong style='color: #F5F5F5; font-size: 0.95rem;'>Source: {source} (Page {page})</strong>
+                    <span style='background-color: #4F8CFF22; color: #4F8CFF; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;'>Score: {confidence:.2f}</span>
+                </div>
+                <p style='color: #D1D5DB; font-size: 0.88rem; margin: 0 0 0.5rem 0; font-family: monospace; white-space: pre-wrap;'>{chunk["content"]}</p>
+                <div style='font-size: 0.75rem; color: #9E9E9E;'>
+                    Type: {doc_type.upper()} | Method: {source_type.title()} | ID: {chunk_id}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    st.markdown("### 📝 Final Prompt Context Injection")
+    context_str = "\n\n".join([
+        f"[Source: {c['metadata']['source']} Page {c['metadata']['page']}]\n{c['content']}"
+        for c in rag_context
+    ])
+    st.text_area("Context Injected in System Prompts", value=context_str, height=250, disabled=True)
+
+
 

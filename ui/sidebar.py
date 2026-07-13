@@ -18,6 +18,10 @@ def render_sidebar() -> None:
             st.session_state['cfg_risk'] = True
             st.rerun()
             
+        # Navigation Section
+        st.markdown("<div class='sidebar-section-header'>Navigation</div>", unsafe_allow_html=True)
+        st.selectbox("Select View", ["Workspace", "RAG Inspector"], key="nav_page_selection")
+        
         # Projects Section
         st.markdown("<div class='sidebar-section-header'>Projects</div>", unsafe_allow_html=True)
         for proj_name in st.session_state['projects'].keys():

@@ -88,7 +88,14 @@ if 'idea_input' not in st.session_state:
 def main():
     load_custom_css()
     render_sidebar()
-    render_home()
+    
+    # Check sidebar view selection to toggle between Workspace and RAG Inspector diagnostics page
+    view_mode = st.session_state.get("nav_page_selection", "Workspace")
+    if view_mode == "RAG Inspector":
+        from ui.output import render_rag_inspector
+        render_rag_inspector()
+    else:
+        render_home()
 
 if __name__ == "__main__":
     main()

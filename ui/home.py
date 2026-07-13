@@ -1,7 +1,7 @@
 import streamlit as st
 from typing import Tuple, Dict, Any
 from ui.forms import render_project_configuration, render_execution_mode
-from ui.output import render_project_deliverables, render_chat_refinement
+from ui.output import render_project_deliverables, render_chat_refinement, render_knowledge_sources
 from backend.orchestrator import generate_prd, infer_project_metadata
 
 def render_hero() -> None:
@@ -116,7 +116,8 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                         "prd": result.get("prd", {}),
                         "deliverables": result["data"],
                         "agent_logs": result.get("agent_logs", []),
-                        "metadata_context": result.get("metadata", {})
+                        "metadata_context": result.get("metadata", {}),
+                        "rag_context": result.get("rag_context", [])
                     }
                     st.session_state['active_project_id'] = proj_name
                     st.success("Validated PRD generated — workspace ready!")
@@ -191,5 +192,6 @@ def render_home() -> None:
         # Mode B: Persistent Active Project Workspace
         project = st.session_state['projects'][active_id]
         render_project_header(project)
+        render_knowledge_sources(project)
         render_project_deliverables(project)
         render_chat_refinement(project)
