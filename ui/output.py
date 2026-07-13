@@ -468,7 +468,24 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                     if st.button("Generate", key=f"lazy_gen_{tab_name}_{project['name']}", type="primary", use_container_width=True):
                         with st.spinner(f"Generating {tab_name}..."):
                             try:
+                                from backend.profiler import PerformanceProfiler
+                                profiler = PerformanceProfiler.get_instance()
+                                profiler.reset()
+                                profiler.start(tab_name)
+                                profiler.start("TOTAL")
                                 generated_content = run_lazy_agent(tab_name, project)
+                                profiler.end(tab_name)
+                                profiler.end("TOTAL")
+                                
+                                # Store timings inside context dict
+                                if "performance" not in project:
+                                    project["performance"] = {}
+                                project["performance"][tab_name] = profiler.get_duration(tab_name)
+                                project["performance"]["TOTAL"] = profiler.get_duration("TOTAL")
+                                
+                                # Print clean summary timing report
+                                print(profiler.summary())
+                                
                                 # User Stories returns raw structured JSON — store directly.
                                 # All other agents return a section dict — wrap in {"content": ...}.
                                 if tab_name == "User Stories":

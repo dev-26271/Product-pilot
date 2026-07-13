@@ -83,18 +83,22 @@ def infer_project_metadata(idea: str) -> Dict[str, str]:
     First runs a zero-latency fast keyword pre-parser, falling back to a lightweight LLM call
     if matches are inconclusive. Always returns a confidence-score structured outcome.
     """
-    logger.info("Running metadata inference...")
-    
-    # Try zero-latency fast parser first
-    fast_inferred = _fast_regex_parse(idea)
-    if len(fast_inferred) == 3:
-        logger.info(f"Fast parser achieved 100% resolution: {fast_inferred}")
-        return fast_inferred
+    from backend.profiler import PerformanceProfiler
+    profiler = PerformanceProfiler.get_instance()
+    profiler.start("Metadata")
+    try:
+        logger.info("Running metadata inference...")
         
-    # Fall back to lightweight LLM classifier for remaining fields
-    from backend.llm import get_llm
-    
-    system_prompt = """You are a product classifier. Given a product idea, return a JSON object with exactly three keys:
+        # Try zero-latency fast parser first
+        fast_inferred = _fast_regex_parse(idea)
+        if len(fast_inferred) == 3:
+            logger.info(f"Fast parser achieved 100% resolution: {fast_inferred}")
+            return fast_inferred
+            
+        # Fall back to lightweight LLM classifier for remaining fields
+        from backend.llm import get_llm
+        
+        system_prompt = """You are a product classifier. Given a product idea, return a JSON object with exactly three keys:
 {
   "industry": "<one of: Healthcare, Finance, Education, Retail, Logistics, Travel, Real Estate, HR, Legal, Entertainment, Food & Beverage, Agriculture, Government, Technology, Other>",
   "product_type": "<one of: SaaS Platform, Mobile App, AI Assistant, Marketplace, Dashboard, Internal Tool, API Platform, Enterprise Software, CRM, Productivity Tool>",
@@ -106,42 +110,44 @@ Rules:
 - Pick the single best match for each field based on the product idea.
 - If uncertain, choose the closest reasonable option.
 """
-    user_message = f"Product idea: {idea}\nFast Pre-parsed defaults: {fast_inferred}"
-    
-    try:
-        llm = get_llm()
-        response = llm.invoke([
-            ("system", system_prompt),
-            ("user", user_message),
-        ])
-        raw = response.content.strip()
+        user_message = f"Product idea: {idea}\nFast Pre-parsed defaults: {fast_inferred}"
         
-        # Strip code fences if present
-        if raw.startswith("```"):
-            lines = raw.splitlines()
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].startswith("```"):
-                lines = lines[:-1]
-            raw = "\n".join(lines).strip()
-        
-        data = json.loads(raw)
-        
-        # Combine fast parser results with LLM results
-        final_inferred = {
-            "industry": fast_inferred.get("industry") or data.get("industry", "Other"),
-            "product_type": fast_inferred.get("product_type") or data.get("product_type", "SaaS Platform"),
-            "audience": fast_inferred.get("audience") or data.get("audience", "B2C"),
-        }
-        logger.info(f"Metadata inference completed successfully: {final_inferred}")
-        return final_inferred
-    except Exception as e:
-        logger.warning(f"Lightweight LLM metadata classification failed, using fallbacks: {e}")
-        return {
-            "industry": fast_inferred.get("industry", "Other"),
-            "product_type": fast_inferred.get("product_type", "SaaS Platform"),
-            "audience": fast_inferred.get("audience", "B2C"),
-        }
+        try:
+            llm = get_llm()
+            response = llm.invoke([
+                ("system", system_prompt),
+                ("user", user_message),
+            ])
+            raw = response.content.strip()
+            
+            # Strip code fences if present
+            if raw.startswith("```"):
+                lines = raw.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                raw = "\n".join(lines).strip()
+            
+            data = json.loads(raw)
+            
+            # Combine fast parser results with LLM results
+            final_inferred = {
+                "industry": fast_inferred.get("industry") or data.get("industry", "Other"),
+                "product_type": fast_inferred.get("product_type") or data.get("product_type", "SaaS Platform"),
+                "audience": fast_inferred.get("audience") or data.get("audience", "B2C"),
+            }
+            logger.info(f"Metadata inference completed successfully: {final_inferred}")
+            return final_inferred
+        except Exception as e:
+            logger.warning(f"Lightweight LLM metadata classification failed, using fallbacks: {e}")
+            return {
+                "industry": fast_inferred.get("industry", "Other"),
+                "product_type": fast_inferred.get("product_type", "SaaS Platform"),
+                "audience": fast_inferred.get("audience", "B2C"),
+            }
+    finally:
+        profiler.end("Metadata")
 
 
 class OrchestrationStrategy(ABC):
@@ -158,6 +164,9 @@ class PythonLocalStrategy(OrchestrationStrategy):
     
     def execute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         logger.info("Executing PythonLocalStrategy (multi-agent context pipeline)...")
+        from backend.profiler import PerformanceProfiler
+        profiler = PerformanceProfiler.get_instance()
+        profiler.start("TOTAL")
         start_time = time.perf_counter()
         
         project_data = payload.get("project", payload)
@@ -185,6 +194,7 @@ class PythonLocalStrategy(OrchestrationStrategy):
         import rag.retriever
         from pathlib import Path
         
+        profiler.start("RAG Retrieval")
         logger.info("Initializing orchestrator-owned RAG grounding context...")
         base_dir = Path(__file__).resolve().parent.parent
         rag_service = RetrievalService(use_reranker=True)
@@ -227,26 +237,38 @@ class PythonLocalStrategy(OrchestrationStrategy):
         ]
         rag.retriever.ACTIVE_GROUNDING_CONTEXT = lc_docs
         logger.info(f"Grounded workspace context with {len(lc_docs)} chunks.")
+        profiler.end("RAG Retrieval")
         
         # 2. Step 1: Intent Extraction Agent
         intent_agent = registry.get("intent_extractor")
+        profiler.start("Intent Extraction")
         context = intent_agent.execute(context, pre_parsed_metadata=pre_parsed_meta)
+        profiler.end("Intent Extraction")
         
         # 3. Step 2: Business Analyst Agent
         ba_agent = registry.get("business_analyst")
+        profiler.start("Business Analyst")
         context = ba_agent.execute(context)
+        profiler.end("Business Analyst")
         
         # 4. Step 3: Product Manager Agent
         pm_agent = registry.get("product_manager")
+        profiler.start("Product Manager")
         context = pm_agent.execute(context)
+        profiler.end("Product Manager")
         
         # 5. Step 4: Validation & PM Self-Repair Loop
         val_agent = registry.get("validation_agent")
         
         # Maximum repair loops: 2 attempts
+        validation_total = 0.0
+        repair_total = 0.0
         max_attempts = 2
         for attempt in range(max_attempts + 1):
+            t_val_start = time.perf_counter()
             context = val_agent.execute(context)
+            validation_total += (time.perf_counter() - t_val_start)
+            
             val_report = context.metadata.get("validation_report", {})
             
             if val_report.get("valid", True):
@@ -256,14 +278,18 @@ class PythonLocalStrategy(OrchestrationStrategy):
                 logger.warning(f"PRD failed validation check on attempt {attempt + 1}. Score: {val_report.get('score', 0.0)}")
                 if attempt < max_attempts:
                     logger.info("Triggering PM self-repair step...")
-                    # Re-run PM Agent, passing validation feedback to heal failed sections
+                    t_repair_start = time.perf_counter()
                     context = pm_agent.execute(
                         context,
                         repair_feedback=val_report.get("repair_prompt", ""),
                         current_prd_draft=context.prd
                     )
+                    repair_total += (time.perf_counter() - t_repair_start)
                 else:
                     logger.warning("Max PM self-repair loop attempts reached. Proceeding with current PRD.")
+        
+        profiler.set_duration("Validation", validation_total)
+        profiler.set_duration("Repair Loop", repair_total)
         
         # Build and update entity_graph in context metadata
         from backend.agents.traceability_engine import TraceabilityEngine
@@ -274,7 +300,7 @@ class PythonLocalStrategy(OrchestrationStrategy):
             logger.info("TraceabilityEngine successfully built entity graph for workspace context.")
         except Exception as e:
             logger.error(f"Failed to build initial entity graph: {e}")
-
+ 
         # 6. Step 5: Planning Agent execution
         planning_agent = registry.get("planning_agent")
         try:
@@ -284,6 +310,13 @@ class PythonLocalStrategy(OrchestrationStrategy):
             
         total_duration = time.perf_counter() - start_time
         logger.info(f"Initial Multi-Agent PRD pipeline completed in {total_duration:.4f} seconds.")
+        profiler.end("TOTAL")
+        
+        # Save timings inside context
+        context.performance.update(profiler.timings)
+        
+        # Print clean timing report automatically to standard output
+        print(profiler.summary())
         
         # Return serializable dict output maintaining backwards compatibility with UI
         import copy

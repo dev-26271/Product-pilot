@@ -16,7 +16,8 @@ class WorkspaceContext:
                  rag_context: Optional[List[Any]] = None,
                  metadata: Optional[Dict[str, Any]] = None,
                  deliverables: Optional[Dict[str, Any]] = None,
-                 agent_logs: Optional[List[Dict[str, Any]]] = None):
+                 agent_logs: Optional[List[Dict[str, Any]]] = None,
+                 performance: Optional[Dict[str, float]] = None):
         self.idea = idea
         self.intent_context = intent_context or {}
         self.business_analysis = business_analysis or {}
@@ -25,6 +26,7 @@ class WorkspaceContext:
         self.metadata = metadata or {}
         self.deliverables = deliverables or {}
         self.agent_logs = agent_logs or []
+        self.performance = performance or {}
 
     def clone(self, **kwargs) -> "WorkspaceContext":
         """Creates a new WorkspaceContext instance, applying the given attribute overrides."""
@@ -37,6 +39,7 @@ class WorkspaceContext:
             metadata=copy.deepcopy(kwargs.get("metadata", self.metadata)),
             deliverables=copy.deepcopy(kwargs.get("deliverables", self.deliverables)),
             agent_logs=copy.deepcopy(kwargs.get("agent_logs", self.agent_logs)),
+            performance=copy.deepcopy(kwargs.get("performance", self.performance)),
         )
         return new_instance
 
@@ -57,6 +60,7 @@ class WorkspaceContext:
             "metadata": self.metadata,
             "deliverables": self.deliverables,
             "agent_logs": self.agent_logs,
+            "performance": self.performance,
         }
 
     @classmethod
@@ -138,5 +142,6 @@ class WorkspaceContext:
             metadata=metadata,
             deliverables=raw_deliverables,
             agent_logs=data.get("agent_logs", []),
+            performance=data.get("performance", {}),
         )
 
