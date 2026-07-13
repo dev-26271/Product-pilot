@@ -1,0 +1,842 @@
+
+================================================================================
+  PRODUCTPILOT PIPELINE CONTAMINATION AUDIT
+================================================================================
+
+Timestamp     : 2026-07-13T11:37:42.260606
+Test Idea     : A hyper-local food delivery marketplace optimized for eco-friendly drone shipping and zero-waste packaging.
+Test Industry : Food & Beverage
+Log File      : C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\debug_logs\pipeline_trace_20260713_113742.log
+
+
+================================================================================
+  STAGE 1: BUSINESS ANALYST AGENT
+================================================================================
+
+── 1a. SYSTEM PROMPT ──
+You are an expert Business Analyst working inside the ProductPilot workspace.
+Your task is to analyze the user's product idea and build a structured, comprehensive Business Analysis.
+
+You MUST respond ONLY with a raw JSON object. Do not include markdown formatting, backticks (e.g. ```json), or any conversational text.
+
+The JSON schema must be structured exactly as follows:
+{
+  "Problem Statement": "Detailed description of the core problem to solve based on user description and context.",
+  "Business Goals": [
+    "Metric-driven business goal 1 (e.g., target conversion, SLA limits, or acquisition indices)",
+    "Metric-driven business goal 2"
+  ],
+  "User Personas": [
+    {
+      "name": "Persona Name (e.g., Clinical Practitioner Sarah)",
+      "role": "Role description and workspace alignment",
+      "needs": "Core workflow needs, requirements, and frustrations"
+    }
+  ]
+}
+
+Base your analysis on the provided Context chunks and the User Input details. Ensure all fields are fully populated based on your analysis.
+
+
+── 1b. RAG CHUNKS (retrieve_business) ──
+Query: 'A hyper-local food delivery marketplace optimized for eco-friendly drone shipping and zero-waste packaging.'
+
+  --- Chunk 1 (source: C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\knowledge_base\business\Product discovery.pdf, page: 7) ---
+Dynamic product discovery does not stop with one-time prioritization and passing of a
+roadmap to delivery. In fact, dynamic product discovery must be integrated directly
+with delivery at a data, process, and tool level to share beyond simple priorities to
+include the data and reasoning behind the decisions and to feed new data back to
+Product Management on delivery status, so Product Management can continuously
+revisit priorities, adjust them accordingly. Integration with delivery should also
+facilitate the communication of changes and the reasons behind these changes to
+stakeholders across the organization,to keep the entire organization aligned. Not just
+on decisions, but also the status of execution and changes to these decisions.
+Dynamic product discovery: Ideas to product
+success
+
+  --- Chunk 2 (source: C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\knowledge_base\business\Product discovery.pdf, page: 6) ---
+FIGURE 4. A SALES VIEW WITH THEMES AND DELIVERY STATUS
+FIGURE 5. AN EXECUTIVE VIEW BASED ON COMPANY GOALS
+By involving stakeholders appropriately throughout the product discovery process, and
+by presenting data to them in appropriate and understandable ways, product
+managers can leverage dynamic product discovery to create buy-in on decisions and
+alignment in action.
+Requirement 4: Easily incorporate customer and user feedback
+Customer and user feedback is at the heart of dynamic product discovery. This
+feedback can come from existing systems such as product analytics, customer
+feedback, support, and the formal and informal discussions product managers have
+with users. 
+Requirement 5: Seamless integration with delivery to facilitate agile productization
+
+  --- Chunk 3 (source: C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\knowledge_base\business\SWOT analysis.pdf, page: 6) ---
+What external factors could put the business at risk?
+What political, environmental, social, and technological factors
+(https://www.business.qld.gov.au/running-business/marketing-sales/tendering/improve-
+approach/understanding-buyer/researching/pest) might affect the business?
+What new competitors (https://www.business.qld.gov.au/running-business/marketing-
+sales/marketing/strategy-planning/competitive-advantage) may enter your market? How could this
+affect your business?
+What risk-management strategies (https://www.business.qld.gov.au/running-business/risk/identify-
+manage) do you have in place and could they be improved?
+What tools do you have to build resilience (https://www.business.qld.gov.au/running-
+business/risk/identify-manage) to manage and mitigate risks?
+
+── 1c. USER PROMPT (sent to LLM) ──
+Context:
+Dynamic product discovery does not stop with one-time prioritization and passing of a
+roadmap to delivery. In fact, dynamic product discovery must be integrated directly
+with delivery at a data, process, and tool level to share beyond simple priorities to
+include the data and reasoning behind the decisions and to feed new data back to
+Product Management on delivery status, so Product Management can continuously
+revisit priorities, adjust them accordingly. Integration with delivery should also
+facilitate the communication of changes and the reasons behind these changes to
+stakeholders across the organization,to keep the entire organization aligned. Not just
+on decisions, but also the status of execution and changes to these decisions.
+Dynamic product discovery: Ideas to product
+success
+
+FIGURE 4. A SALES VIEW WITH THEMES AND DELIVERY STATUS
+FIGURE 5. AN EXECUTIVE VIEW BASED ON COMPANY GOALS
+By involving stakeholders appropriately throughout the product discovery process, and
+by presenting data to them in appropriate and understandable ways, product
+managers can leverage dynamic product discovery to create buy-in on decisions and
+alignment in action.
+Requirement 4: Easily incorporate customer and user feedback
+Customer and user feedback is at the heart of dynamic product discovery. This
+feedback can come from existing systems such as product analytics, customer
+feedback, support, and the formal and informal discussions product managers have
+with users. 
+Requirement 5: Seamless integration with delivery to facilitate agile productization
+
+What external factors could put the business at risk?
+What political, environmental, social, and technological factors
+(https://www.business.qld.gov.au/running-business/marketing-sales/tendering/improve-
+approach/understanding-buyer/researching/pest) might affect the business?
+What new competitors (https://www.business.qld.gov.au/running-business/marketing-
+sales/marketing/strategy-planning/competitive-advantage) may enter your market? How could this
+affect your business?
+What risk-management strategies (https://www.business.qld.gov.au/running-business/risk/identify-
+manage) do you have in place and could they be improved?
+What tools do you have to build resilience (https://www.business.qld.gov.au/running-
+business/risk/identify-manage) to manage and mitigate risks?
+
+User Input:
+Product Idea: A hyper-local food delivery marketplace optimized for eco-friendly drone shipping and zero-waste packaging.
+Industry: Food & Beverage
+Product Type: Marketplace
+Audience: Urban consumers aged 18-45
+
+── 1d. FULL MESSAGES ARRAY (system + user) ──
+  [system] You are an expert Business Analyst working inside the ProductPilot workspace.
+Your task is to analyze the user's product idea and build a structured, comprehensive Business Analysis.
+
+You MUST respond...
+  [user] Context:
+Dynamic product discovery does not stop with one-time prioritization and passing of a
+roadmap to delivery. In fact, dynamic product discovery must be integrated directly
+with delivery at a da...
+
+── 1e. RAW LLM RESPONSE ──
+{
+  "Problem Statement": "The current food delivery marketplaces are not optimized for eco-friendly shipping and zero-waste packaging, resulting in high carbon emissions and unnecessary waste. This problem statement is based on the user's product idea of a hyper-local food delivery marketplace that addresses these issues.",
+  "Business Goals": [
+    "Increase market share by 15% within the first year by targeting urban consumers aged 18-45 who prioritize eco-friendliness and sustainability.",
+    "Achieve a customer retention rate of 80% by providing a seamless and efficient delivery experience that reduces carbon emissions and waste.",
+    "Reduce carbon emissions by 20% within the first year by leveraging eco-friendly drone shipping and optimizing delivery routes.",
+    "Implement a zero-waste packaging system that reduces packaging waste by 30% within the first year."
+  ],
+  "User Personas": [
+    {
+      "name": "Eco-Conscious Emma",
+      "role": "Urban consumer aged 25-35 who prioritizes eco-friendliness and sustainability in their daily life.",
+      "needs": "A convenient and efficient food delivery experience that aligns with their values and reduces their carbon footprint. They need to be able to track the carbon emissions and waste generated by their food delivery orders and receive regular updates on the marketplace's sustainability efforts."
+    },
+    {
+      "name": "Busy Bee Sarah",
+      "role": "Urban consumer aged 18-25 who values convenience and speed in their food delivery experience.",
+      "needs": "A fast and reliable food delivery experience that meets their busy lifestyle. They need to be able to track their orders in real-time and receive updates on delivery status and estimated arrival times."
+    }
+  ]
+}
+
+  Parsed BA keys: ['Problem Statement', 'Business Goals', 'User Personas']
+
+================================================================================
+  STAGE 2: PRODUCT MANAGER (PRD) AGENT
+================================================================================
+
+── 2a. SYSTEM PROMPT ──
+You are a senior Product Manager writing an industry-standard Product Requirements Document (PRD).
+
+Do NOT include roadmaps, release timelines, sprint plans, Jira tasks, or user stories. Those are separate documents generated by dedicated agents.
+
+You MUST respond ONLY with a raw JSON object. No markdown formatting, no backticks, no conversational text.
+
+The JSON schema must be structured exactly as follows:
+{
+  "Executive_Summary": "A concise 2-3 sentence overview of the product and the problem it solves.",
+
+  "Product_Vision": "The long-term vision statement describing what the product aspires to become and why it matters.",
+
+  "Problem_Statement": "A precise description of the problem, for whom, and why existing solutions are insufficient.",
+
+  "Goals_and_Objectives": [
+    "Measurable objective 1 (e.g., Reduce patient wait time by 40% within 6 months)",
+    "Measurable objective 2"
+  ],
+
+  "Functional_Requirements": [
+    {
+      "id": "FR-001",
+      "title": "Short feature requirement title",
+      "description": "Detailed description of what the system must do.",
+      "priority": "High / Medium / Low",
+      "acceptance_criteria": "Specific testable condition that defines when this requirement is met."
+    }
+  ],
+
+  "Non_Functional_Requirements": {
+    "Performance": "Response time, throughput, and latency targets.",
+    "Scalability": "Expected load and horizontal/vertical scaling strategy.",
+    "Security": "Authentication, authorisation, encryption, and vulnerability standards.",
+    "Availability": "Uptime SLA and disaster recovery expectations.",
+    "Accessibility": "WCAG compliance level and assistive technology support.",
+    "Compliance": "Regulatory requirements (e.g., HIPAA, GDPR, SOC2) if applicable."
+  },
+
+  "Core_Features": [
+    {
+      "name": "Feature Name",
+      "description": "What this feature does and how it serves the user.",
+      "priority": "High / Medium / Low",
+      "business_value": "Why this feature matters to the business or user."
+    }
+  ],
+
+  "Assumptions": [
+    "Assumption 1 (e.g., Users have a stable internet connection)",
+    "Assumption 2"
+  ],
+
+  "Constraints": [
+    "Constraint 1 (e.g., Must integrate with legacy EHR system via HL7)",
+    "Constraint 2"
+  ],
+
+  "Success_Metrics": [
+    "KPI 1 (e.g., DAU growth of 15% month-over-month)",
+    "KPI 2"
+  ],
+
+  "Open_Questions": [
+    "Unresolved question 1 that needs a stakeholder decision",
+    "Unresolved question 2"
+  ]
+}
+
+Populate every field based on the business analysis and product context provided. Be specific and thorough.
+
+── 2b. RAG CHUNKS (retrieve_product) ──
+Retrieval Query: 'The current food delivery marketplaces are not optimized for eco-friendly shipping and zero-waste packaging, resulting in high carbon emissions and unnecessary waste. This problem statement is based o...'
+
+  --- Chunk 1 (source: C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\knowledge_base\product\Product Management _ Atlassian.pdf, page: 4) ---
+Primary focus The “what” and “why” of the
+product
+The “how” and “when” of
+delivery
+Main
+responsibility
+Defines product vision and
+priorities
+Coordinates execution
+and timelines
+Core goal Deliver long-term customer
+and business value
+Keep initiatives on track
+and completed
+successfully
+Typical work
+Prioritizing features, shaping
+roadmap, understanding
+customer needs
+Managing tasks,
+schedules, resources, and
+milestones
+Measures
+success by
+Outcomes, adoption, and
+customer impact
+Deliverables, deadlines,
+and execution quality
+While the titles sound similar, a product manager and a project manager handle very
+different responsibilities. A product manager owns the "what" and "why" of a product. 
+They define the vision, prioritize features based on customer needs, and ensure the
+
+  --- Chunk 2 (source: C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\knowledge_base\product\Product Management _ Atlassian.pdf, page: 1) ---
+from great ones, and the frameworks that help teams ship products customers
+actually want to use.
+Free product roadmap template
+What is product management?
+Product management guides a product’s lifecycle—from development to pricing—by
+prioritizing the product and its customers.
+To build the best possible product, product managers advocate for customers within
+the organization and make sure the voice of the market is heard and heeded. Thanks
+to this focus on the customer, product teams routinely ship better-designed and
+higher-performing products.
+In tech, where entrenched products are quickly uprooted by newer and better
+solutions, there is more need than ever for an intimate understanding of customers.
+There’s a need to create tailored solutions for them and that’s exactly where product
+
+  --- Chunk 3 (source: C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\knowledge_base\product\user-persona-template.pdf, page: 4) ---
+Product Interaction
+How [Persona Name] Would Use Your Product
+Describe how this persona would discover, evaluate, and use your product.
+Usage scenario...
+Key Features for This Persona
+Which features matter most to them and why?
+Feature 1: [Feature name - why it matters to them]
+Feature 2: [Feature name - why it matters to them]
+Feature 3: [Feature name - why it matters to them]
+Feature 4: [Feature name - why it matters to them]
+Feature 5: [Feature name - why it matters to them]
+Success Metrics
+How would this persona measure success with your product?
+• [Metric 1: e.g., Time saved per week]
+• [Metric 2: e.g., Increase in team productivity]
+• [Metric 3: e.g., Reduction in errors]
+• [Metric 4: e.g., Cost savings]
+Objections & Concerns
+What might prevent them from buying or using your product?
+
+── 2c. USER PROMPT (sent to LLM) ──
+Retrieved Product Context:
+Primary focus The “what” and “why” of the
+product
+The “how” and “when” of
+delivery
+Main
+responsibility
+Defines product vision and
+priorities
+Coordinates execution
+and timelines
+Core goal Deliver long-term customer
+and business value
+Keep initiatives on track
+and completed
+successfully
+Typical work
+Prioritizing features, shaping
+roadmap, understanding
+customer needs
+Managing tasks,
+schedules, resources, and
+milestones
+Measures
+success by
+Outcomes, adoption, and
+customer impact
+Deliverables, deadlines,
+and execution quality
+While the titles sound similar, a product manager and a project manager handle very
+different responsibilities. A product manager owns the "what" and "why" of a product. 
+They define the vision, prioritize features based on customer needs, and ensure the
+
+from great ones, and the frameworks that help teams ship products customers
+actually want to use.
+Free product roadmap template
+What is product management?
+Product management guides a product’s lifecycle—from development to pricing—by
+prioritizing the product and its customers.
+To build the best possible product, product managers advocate for customers within
+the organization and make sure the voice of the market is heard and heeded. Thanks
+to this focus on the customer, product teams routinely ship better-designed and
+higher-performing products.
+In tech, where entrenched products are quickly uprooted by newer and better
+solutions, there is more need than ever for an intimate understanding of customers.
+There’s a need to create tailored solutions for them and that’s exactly where product
+
+Product Interaction
+How [Persona Name] Would Use Your Product
+Describe how this persona would discover, evaluate, and use your product.
+Usage scenario...
+Key Features for This Persona
+Which features matter most to them and why?
+Feature 1: [Feature name - why it matters to them]
+Feature 2: [Feature name - why it matters to them]
+Feature 3: [Feature name - why it matters to them]
+Feature 4: [Feature name - why it matters to them]
+Feature 5: [Feature name - why it matters to them]
+Success Metrics
+How would this persona measure success with your product?
+• [Metric 1: e.g., Time saved per week]
+• [Metric 2: e.g., Increase in team productivity]
+• [Metric 3: e.g., Reduction in errors]
+• [Metric 4: e.g., Cost savings]
+Objections & Concerns
+What might prevent them from buying or using your product?
+
+Business Analysis JSON:
+{
+  "Problem Statement": "The current food delivery marketplaces are not optimized for eco-friendly shipping and zero-waste packaging, resulting in high carbon emissions and unnecessary waste. This problem statement is based on the user's product idea of a hyper-local food delivery marketplace that addresses these issues.",
+  "Business Goals": [
+    "Increase market share by 15% within the first year by targeting urban consumers aged 18-45 who prioritize eco-friendliness and sustainability.",
+    "Achieve a customer retention rate of 80% by providing a seamless and efficient delivery experience that reduces carbon emissions and waste.",
+    "Reduce carbon emissions by 20% within the first year by leveraging eco-friendly drone shipping and optimizing delivery routes.",
+    "Implement a zero-waste packaging system that reduces packaging waste by 30% within the first year."
+  ],
+  "User Personas": [
+    {
+      "name": "Eco-Conscious Emma",
+      "role": "Urban consumer aged 25-35 who prioritizes eco-friendliness and sustainability in their daily life.",
+      "needs": "A convenient and efficient food delivery experience that aligns with their values and reduces their carbon footprint. They need to be able to track the carbon emissions and waste generated by their food delivery orders and receive regular updates on the marketplace's sustainability efforts."
+    },
+    {
+      "name": "Busy Bee Sarah",
+      "role": "Urban consumer aged 18-25 who values convenience and speed in their food delivery experience.",
+      "needs": "A fast and reliable food delivery experience that meets their busy lifestyle. They need to be able to track their orders in real-time and receive updates on delivery status and estimated arrival times."
+    }
+  ]
+}
+
+── 2d. RAW LLM RESPONSE ──
+{
+  "Executive_Summary": "Our product aims to revolutionize the food delivery market by introducing a hyper-local marketplace that prioritizes eco-friendly shipping and zero-waste packaging, reducing carbon emissions and unnecessary waste while providing a seamless and efficient delivery experience for urban consumers.",
+  
+  "Product_Vision": "To become the leading hyper-local food delivery marketplace that empowers consumers to make sustainable choices while delivering exceptional customer experiences and driving business growth through innovation and customer-centricity.",
+  
+  "Problem_Statement": "The current food delivery marketplaces are not optimized for eco-friendly shipping and zero-waste packaging, resulting in high carbon emissions and unnecessary waste. This problem statement is based on the user's product idea of a hyper-local food delivery marketplace that addresses these issues.",
+  
+  "Goals_and_Objectives": [
+    "Increase market share by 15% within the first year by targeting urban consumers aged 18-45 who prioritize eco-friendliness and sustainability.",
+    "Achieve a customer retention rate of 80% by providing a seamless and efficient delivery experience that reduces carbon emissions and waste.",
+    "Reduce carbon emissions by 20% within the first year by leveraging eco-friendly drone shipping and optimizing delivery routes.",
+    "Implement a zero-waste packaging system that reduces packaging waste by 30% within the first year."
+  ],
+  
+  "Functional_Requirements": [
+    {
+      "id": "FR-001",
+      "title": "User Profile Management",
+      "description": "Allow users to create and manage their profiles, including setting eco-friendly preferences and tracking their carbon footprint.",
+      "priority": "High",
+      "acceptance_criteria": "Users can create and edit their profiles, and their eco-friendly preferences are reflected in the delivery experience."
+    },
+    {
+      "id": "FR-002",
+      "title": "Eco-Friendly Shipping Options",
+      "description": "Provide users with eco-friendly shipping options, including drone delivery and optimized delivery routes, to reduce carbon emissions.",
+      "priority": "High",
+      "acceptance_criteria": "Users can select eco-friendly shipping options, and the system calculates and displays the reduced carbon emissions."
+    },
+    {
+      "id": "FR-003",
+      "title": "Zero-Waste Packaging System",
+      "description": "Implement a zero-waste packaging system that reduces packaging waste by 30% within the first year.",
+      "priority": "High",
+      "acceptance_criteria": "The system generates zero-waste packaging for all orders, and packaging waste is tracked and reported."
+    },
+    {
+      "id": "FR-004",
+      "title": "Real-Time Order Tracking",
+      "description": "Allow users to track their orders in real-time, including estimated arrival times and delivery status.",
+      "priority": "Medium",
+      "acceptance_criteria": "Users can track their orders in real-time, and the system updates the delivery status and estimated arrival time."
+    }
+  ],
+  
+  "Non_Functional_Requirements": {
+    "Performance": "The system must handle 10,000 concurrent users with a response time of less than 2 seconds.",
+    "Scalability": "The system must scale horizontally to handle increased traffic and user growth.",
+    "Security": "The system must implement robust authentication and authorization mechanisms to protect user data.",
+    "Availability": "The system must be available 99.99% of the time, with a maximum downtime of 1 hour per month.",
+    "Accessibility": "The system must comply with WCAG 2.1 Level AA standards and support assistive technologies.",
+    "Compliance": "The system must comply with relevant regulations, including GDPR and CCPA."
+  },
+  
+  "Core_Features": [
+    {
+      "name": "Eco-Friendly Shipping",
+      "description": "Provide users with eco-friendly shipping options, including drone delivery and optimized delivery routes, to reduce carbon emissions.",
+      "priority": "High",
+      "business_value": "Reduces carbon emissions and improves customer satisfaction."
+    },
+    {
+      "name": "Zero-Waste Packaging",
+      "description": "Implement a zero-waste packaging system that reduces packaging waste by 30% within the first year.",
+      "priority": "High",
+      "business_value": "Reduces packaging waste and improves customer satisfaction."
+    },
+    {
+      "name": "Real-Time Order Tracking",
+      "description": "Allow users to track their orders in real-time, including estimated arrival times and delivery status.",
+      "priority": "Medium",
+      "business_value": "Improves customer satisfaction and reduces support requests."
+    }
+  ],
+  
+  "Assumptions": [
+    "Users will prioritize eco-friendliness and sustainability in their food delivery experience.",
+    "The system will be able to integrate with existing food delivery infrastructure."
+  ],
+  
+  "Constraints": [
+    "The system must comply with relevant regulations, including GDPR and CCPA.",
+    "The system must be able to handle 10,000 concurrent users with a response time of less than 2 seconds."
+  ],
+  
+  "Success_Metrics": [
+    "Increase in market share by 15% within the first year.",
+    "Customer retention rate of 80%.",
+    "Reduction in carbon emissions by 20% within the first year.",
+    "Reduction in packaging waste by 30% within the first year."
+  ],
+  
+  "Open_Questions": [
+    "How will we measure and track carbon emissions and packaging waste?",
+    "What are the technical requirements for implementing drone delivery and optimized delivery routes?"
+  ]
+}
+
+  Parsed PM keys: ['Executive_Summary', 'Product_Vision', 'Problem_Statement', 'Goals_and_Objectives', 'Functional_Requirements', 'Non_Functional_Requirements', 'Core_Features', 'Assumptions', 'Constraints', 'Success_Metrics', 'Open_Questions']
+
+================================================================================
+  STAGE 3: USER STORY AGENT
+================================================================================
+
+── 3a. SYSTEM PROMPT ──
+You are a senior Agile Product Manager specializing in translating Product Requirements Documents (PRDs) into production-grade Agile artifacts.
+
+Your task is to generate Epics and User Stories from the provided Business Analysis, PRD, and product context.
+
+CRITICAL RULES:
+1. The PRD is the single source of truth. Every story MUST trace back to at least one Functional Requirement (e.g. FR-001) from the PRD.
+2. Do NOT fabricate stories that have no basis in the PRD functional requirements.
+3. Do NOT return markdown, HTML, or any prose. Return ONLY a single raw JSON object.
+4. Do NOT include triple backticks or any code fences.
+5. Every field in the schema is MANDATORY. Never omit a field.
+
+OUTPUT SCHEMA — return exactly this structure:
+{
+  "epics": [
+    {
+      "id": "EP-001",
+      "title": "Short epic title",
+      "description": "What this epic covers and its product scope.",
+      "business_value": "The measurable business outcome this epic delivers.",
+      "release": "MVP | Phase 1 | Phase 2 | Phase 3",
+      "status": "Draft"
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-001",
+      "epic_id": "EP-001",
+      "feature": "The specific PRD feature or capability this story implements.",
+      "title": "Short story title",
+      "persona": "The exact user persona from the Business Analysis (e.g. Clinical Practitioner Sarah)",
+      "action": "What the persona wants to do (I want to...)",
+      "value": "The business/user outcome (So that...)",
+      "priority": "Critical | High | Medium | Low",
+      "estimate": {
+        "story_points": 1,
+        "complexity": "Low | Medium | High"
+      },
+      "acceptance_criteria": [
+        "Given [context], when [action], then [outcome].",
+        "Given [context], when [action], then [outcome]."
+      ],
+      "dependencies": [],
+      "traceability": {
+        "functional_requirements": ["FR-001"],
+        "business_goals": ["BG-001"]
+      },
+      "labels": ["frontend", "backend", "api", "auth", "notifications", "analytics"],
+      "risk": "Low | Medium | High",
+      "status": "To Do"
+    }
+  ]
+}
+
+STATUS VALUES — only use these exact strings:
+- For Epics: Draft, Ready, In Progress, Done
+- For Stories: To Do, In Progress, Blocked, Done
+
+PRIORITY VALUES — only use: Critical, High, Medium, Low
+COMPLEXITY VALUES — only use: Low, Medium, High
+RELEASE VALUES — only use: MVP, Phase 1, Phase 2, Phase 3
+
+TRACEABILITY RULES:
+- functional_requirements: Reference IDs exactly as they appear in the PRD (e.g. FR-001, FR-002). MANDATORY for every story.
+- business_goals: Reference business goals from the Business Analysis when applicable. Use BG-001, BG-002, etc. to identify them by index if they have no IDs.
+
+STORY FORMAT RULES:
+- Each Epic must contain between 3 and 8 stories.
+- Generate 2 to 4 Epics depending on the scope of the product.
+- The "persona" field must use real persona names from the Business Analysis (e.g. "Patient David", "Dr. Sarah"), not generic terms like "user" or "admin".
+- The "action" field should be the "I want to..." clause, written as a clear imperative.
+- The "value" field should be the "So that..." clause, written as a business or user outcome.
+- acceptance_criteria must use Given/When/Then format. Each story must have at least 2 criteria.
+- "dependencies" lists other story IDs (e.g. "US-002") this story depends on. Use an empty array if none.
+- "labels" are lowercase technical tags describing which system layer this story touches.
+- story_points must be Fibonacci: 1, 2, 3, 5, 8, 13.
+- "risk" reflects the delivery risk of implementing the story (Low, Medium, High).
+
+Generate ONLY stories that are directly traceable to functional requirements in the supplied PRD. Quality over quantity.
+
+
+── 3b. USER PROMPT (sent to LLM) ──
+=== PROJECT CONTEXT ===
+Product Idea: A hyper-local food delivery marketplace optimized for eco-friendly drone shipping and zero-waste packaging.
+Industry: Food & Beverage
+Product Type: Marketplace
+Target Audience: Urban consumers aged 18-45
+
+=== BUSINESS ANALYSIS (source of personas and business goals) ===
+{
+  "Problem Statement": "The current food delivery marketplaces are not optimized for eco-friendly shipping and zero-waste packaging, resulting in high carbon emissions and unnecessary waste. This problem statement is based on the user's product idea of a hyper-local food delivery marketplace that addresses these issues.",
+  "Business Goals": [
+    "Increase market share by 15% within the first year by targeting urban consumers aged 18-45 who prioritize eco-friendliness and sustainability.",
+    "Achieve a customer retention rate of 80% by providing a seamless and efficient delivery experience that reduces carbon emissions and waste.",
+    "Reduce carbon emissions by 20% within the first year by leveraging eco-friendly drone shipping and optimizing delivery routes.",
+    "Implement a zero-waste packaging system that reduces packaging waste by 30% within the first year."
+  ],
+  "User Personas": [
+    {
+      "name": "Eco-Conscious Emma",
+      "role": "Urban consumer aged 25-35 who prioritizes eco-friendliness and sustainability in their daily life.",
+      "needs": "A convenient and efficient food delivery experience that aligns with their values and reduces their carbon footprint. They need to be able to track the carbon emissions and waste generated by their food delivery orders and receive regular updates on the marketplace's sustainability efforts."
+    },
+    {
+      "name": "Busy Bee Sarah",
+      "role": "Urban consumer aged 18-25 who values convenience and speed in their food delivery experience.",
+      "needs": "A fast and reliable food delivery experience that meets their busy lifestyle. They need to be able to track their orders in real-time and receive updates on delivery status and estimated arrival times."
+    }
+  ]
+}
+
+=== PRODUCT REQUIREMENTS DOCUMENT — PRIMARY SOURCE OF TRUTH ===
+{
+  "\ud83d\udccb Executive Summary": "Our product aims to revolutionize the food delivery market by introducing a hyper-local marketplace that prioritizes eco-friendly shipping and zero-waste packaging, reducing carbon emissions and unnecessary waste while providing a seamless and efficient delivery experience for urban consumers.",
+  "\ud83d\udd2d Product Vision": "To become the leading hyper-local food delivery marketplace that empowers consumers to make sustainable choices while delivering exceptional customer experiences and driving business growth through innovation and customer-centricity.",
+  "\ud83c\udfaf Problem Statement": "The current food delivery marketplaces are not optimized for eco-friendly shipping and zero-waste packaging, resulting in high carbon emissions and unnecessary waste. This problem statement is based on the user's product idea of a hyper-local food delivery marketplace that addresses these issues.",
+  "\u2699\ufe0f Functional Requirements": "**FR-001 \u2014 User Profile Management** (Priority: High)\nAllow users to create and manage their profiles, including setting eco-friendly preferences and tracking their carbon footprint.\n*Acceptance Criteria:* Users can create and edit their profiles, and their eco-friendly preferences are reflected in the delivery experience.\n\n**FR-002 \u2014 Eco-Friendly Shipping Options** (Priority: High)\nProvide users with eco-friendly shipping options, including drone delivery and optimized delivery routes, to reduce carbon emissions.\n*Acceptance Criteria:* Users can select eco-friendly shipping options, and the system calculates and displays the reduced carbon emissions.\n\n**FR-003 \u2014 Zero-Waste Packaging System** (Priority: High)\nImplement a zero-waste packaging system that reduces packaging waste by 30% within the first year.\n*Acceptance Criteria:* The system generates zero-waste packaging for all orders, and packaging waste is tracked and reported.\n\n**FR-004 \u2014 Real-Time Order Tracking** (Priority: Medium)\nAllow users to track their orders in real-time, including estimated arrival times and delivery status.\n*Acceptance Criteria:* Users can track their orders in real-time, and the system updates the delivery status and estimated arrival time."
+}
+
+=== INSTRUCTIONS ===
+Generate Epics and User Stories that directly trace to the Functional Requirements above.
+Return ONLY the raw JSON object. No markdown. No prose. No code fences.
+Every story MUST include traceability.functional_requirements referencing exact FR IDs from the PRD.
+
+── 3c. RAW LLM RESPONSE ──
+{
+  "epics": [
+    {
+      "id": "EP-001",
+      "title": "Eco-Friendly Food Delivery Experience",
+      "description": "Implement a hyper-local food delivery marketplace that prioritizes eco-friendly shipping and zero-waste packaging, reducing carbon emissions and unnecessary waste while providing a seamless and efficient delivery experience for urban consumers.",
+      "business_value": "Increase market share by 15% within the first year by targeting urban consumers aged 18-45 who prioritize eco-friendliness and sustainability.",
+      "release": "MVP",
+      "status": "Draft"
+    },
+    {
+      "id": "EP-002",
+      "title": "User-Centric Features and Experience",
+      "description": "Develop user-centric features and experiences that empower consumers to make sustainable choices, track their carbon footprint, and receive regular updates on the marketplace's sustainability efforts.",
+      "business_value": "Achieve a customer retention rate of 80% by providing a seamless and efficient delivery experience that reduces carbon emissions and waste.",
+      "release": "Phase 1",
+      "status": "Draft"
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-001",
+      "epic_id": "EP-001",
+      "feature": "User Profile Management",
+      "title": "Create and Manage User Profiles",
+      "persona": "Eco-Conscious Emma",
+      "action": "I want to create and manage my user profile to track my eco-friendly preferences and carbon footprint.",
+      "value": "So that I can make sustainable choices and receive regular updates on the marketplace's sustainability efforts.",
+      "priority": "High",
+      "estimate": {
+        "story_points": 5,
+        "complexity": "Medium"
+      },
+      "acceptance_criteria": [
+        "Given a user is logged in, when they create a new profile, then their eco-friendly preferences are saved and reflected in the delivery experience.",
+        "Given a user is logged in, when they edit their profile, then their changes are saved and reflected in the delivery experience."
+      ],
+      "dependencies": [],
+      "traceability": {
+        "functional_requirements": ["FR-001"],
+        "business_goals": ["BG-001"]
+      },
+      "labels": ["user-profile", "eco-friendly", "sustainability"],
+      "risk": "Medium",
+      "status": "To Do"
+    },
+    {
+      "id": "US-002",
+      "epic_id": "EP-001",
+      "feature": "Eco-Friendly Shipping Options",
+      "title": "Select Eco-Friendly Shipping Options",
+      "persona": "Eco-Conscious Emma",
+      "action": "I want to select eco-friendly shipping options to reduce my carbon footprint.",
+      "value": "So that I can make sustainable choices and contribute to reducing carbon emissions.",
+      "priority": "High",
+      "estimate": {
+        "story_points": 8,
+        "complexity": "High"
+      },
+      "acceptance_criteria": [
+        "Given a user selects eco-friendly shipping options, when they place an order, then the system calculates and displays the reduced carbon emissions.",
+        "Given a user selects standard shipping options, when they place an order, then the system displays the standard carbon emissions."
+      ],
+      "dependencies": [],
+      "traceability": {
+        "functional_requirements": ["FR-002"],
+        "business_goals": ["BG-002"]
+      },
+      "labels": ["shipping", "eco-friendly", "sustainability"],
+      "risk": "High",
+      "status": "To Do"
+    },
+    {
+      "id": "US-003",
+      "epic_id": "EP-002",
+      "feature": "Real-Time Order Tracking",
+      "title": "Track Orders in Real-Time",
+      "persona": "Busy Bee Sarah",
+      "action": "I want to track my orders in real-time to stay updated on delivery status and estimated arrival times.",
+      "value": "So that I can plan my day and receive my orders on time.",
+      "priority": "Medium",
+      "estimate": {
+        "story_points": 3,
+        "complexity": "Low"
+      },
+      "acceptance_criteria": [
+        "Given a user is logged in, when they track their order, then the system updates the delivery status and estimated arrival time.",
+        "Given a user is logged in, when they track their order, then the system displays the order history."
+      ],
+      "dependencies": [],
+      "traceability": {
+        "functional_requirements": ["FR-004"],
+        "business_goals": ["BG-003"]
+      },
+      "labels": ["order-tracking", "real-time", "delivery"],
+      "risk": "Low",
+      "status": "To Do"
+    },
+    {
+      "id": "US-004",
+      "epic_id": "EP-002",
+      "feature": "Zero-Waste Packaging System",
+      "title": "Implement Zero-Waste Packaging",
+      "persona": "Eco-Conscious Emma",
+      "action": "I want to receive zero-waste packaging for my orders to reduce packaging waste.",
+      "value": "So that I can contribute to reducing packaging waste and make sustainable choices.",
+      "priority": "High",
+      "estimate": {
+        "story_points": 13,
+        "complexity": "High"
+      },
+      "acceptance_criteria": [
+        "Given a user places an order, when the system generates packaging, then the packaging is zero-waste.",
+        "Given a user places an order, when the system generates packaging, then the packaging waste is tracked and reported."
+      ],
+      "dependencies": [],
+      "traceability": {
+        "functional_requirements": ["FR-003"],
+        "business_goals": ["BG-004"]
+      },
+      "labels": ["zero-waste", "packaging", "sustainability"],
+      "risk": "High",
+      "status": "To Do"
+    }
+  ]
+}
+
+================================================================================
+  CONTAMINATION ANALYSIS REPORT
+================================================================================
+
+Total healthcare-term matches: 9
+
+── CONTAMINATION BY SOURCE ──
+
+  📍 BA_SYSTEM_PROMPT: 2 hit(s)
+      [BA_SYSTEM_PROMPT] Term: 'Clinical' → ..."User Personas": [     {       "name": "Persona Name (e.g., Clinical Practitioner Sarah)",       "role": "Role description and w...
+      [BA_SYSTEM_PROMPT] Term: 'Practitioner' → ...sonas": [     {       "name": "Persona Name (e.g., Clinical Practitioner Sarah)",       "role": "Role description and workspace alig...
+
+  📍 PM_SYSTEM_PROMPT: 4 hit(s)
+      [PM_SYSTEM_PROMPT] Term: 'patient' → ...nd_Objectives": [     "Measurable objective 1 (e.g., Reduce patient wait time by 40% within 6 months)",     "Measurable objecti...
+      [PM_SYSTEM_PROMPT] Term: 'EHR' → ...nts": [     "Constraint 1 (e.g., Must integrate with legacy EHR system via HL7)",     "Constraint 2"   ],    "Success_Metri...
+      [PM_SYSTEM_PROMPT] Term: 'HL7' → ...nstraint 1 (e.g., Must integrate with legacy EHR system via HL7)",     "Constraint 2"   ],    "Success_Metrics": [     "KPI...
+      [PM_SYSTEM_PROMPT] Term: 'HIPAA' → ...upport.",     "Compliance": "Regulatory requirements (e.g., HIPAA, GDPR, SOC2) if applicable."   },    "Core_Features": [...
+
+  📍 US_SYSTEM_PROMPT: 3 hit(s)
+      [US_SYSTEM_PROMPT] Term: 'Patient' → ...st use real persona names from the Business Analysis (e.g. "Patient David", "Dr. Sarah"), not generic terms like "user" or "adm...
+      [US_SYSTEM_PROMPT] Term: 'Clinical' → ...": "The exact user persona from the Business Analysis (e.g. Clinical Practitioner Sarah)",       "action": "What the persona wan...
+      [US_SYSTEM_PROMPT] Term: 'Practitioner' → ...xact user persona from the Business Analysis (e.g. Clinical Practitioner Sarah)",       "action": "What the persona wants to do (I w...
+
+── FIRST CONTAMINATION POINT ──
+  ⚡ FIRST CONTAMINATION APPEARS AT: BA_SYSTEM_PROMPT
+     (2 healthcare term(s) found here)
+     This is the ROOT CAUSE of downstream contamination.
+
+================================================================================
+  KNOWLEDGE BASE FILE AUDIT
+================================================================================
+
+
+  📂 Business KB: C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\knowledge_base\business
+    - .gitkeep (43 bytes)
+    - buisness_model_canvas.pdf (85,803 bytes)
+    - Lean Canvas.pdf (87,528 bytes)
+    - medical_platform.pdf (1,528 bytes)  ⚠️ SUSPECT
+    - Product discovery.pdf (1,086,535 bytes)
+    - stakeholder analysis.pdf (1,459,024 bytes)
+    - SWOT analysis.pdf (208,235 bytes)
+
+  📂 Product KB: C:\Users\Dev Suri\.gemini\antigravity\scratch\prd_generator\knowledge_base\product
+    - .gitkeep (42 bytes)
+    - Free Business Requirements Document Template.pdf (61,242 bytes)
+    - Manifesto for Agile Software Development.pdf (62,252 bytes)
+    - paper.pdf (295,755 bytes)
+    - Principles behind the Agile Manifesto.pdf (73,849 bytes)
+    - Product Management _ Atlassian.pdf (5,474,563 bytes)
+    - Product Roadmap Guide_ What is it & How to Create One.pdf (1,376,999 bytes)
+    - Scrum Guides.pdf (476,002 bytes)
+    - user-persona-template.pdf (10,310 bytes)
+    - What is a Product Requirements Document (PRD)_.pdf (1,623,783 bytes)
+    - Writing user stories.pdf (148,048 bytes)
+
+================================================================================
+  SYSTEM PROMPT HEALTHCARE TERM AUDIT
+================================================================================
+
+
+  ⚠️ BRD_AGENT_SYSTEM_PROMPT: 1 healthcare term(s)
+      [BRD_AGENT_SYSTEM_PROMPT] Term: 'HIPAA' → ...,   "🔒 Compliance & Policy": "Regulatory constraints (e.g., HIPAA, GDPR), compliance pathways, and corporate policies." }  Do...
+
+  ⚠️ BUSINESS_ANALYST_SYSTEM_PROMPT: 2 healthcare term(s)
+      [BUSINESS_ANALYST_SYSTEM_PROMPT] Term: 'Clinical' → ..."User Personas": [     {       "name": "Persona Name (e.g., Clinical Practitioner Sarah)",       "role": "Role description and w...
+      [BUSINESS_ANALYST_SYSTEM_PROMPT] Term: 'Practitioner' → ...sonas": [     {       "name": "Persona Name (e.g., Clinical Practitioner Sarah)",       "role": "Role description and workspace alig...
+  ✅ DOCUMENT_REFINER_SYSTEM_PROMPT: clean
+  ✅ JIRA_AGENT_SYSTEM_PROMPT: clean
+
+  ⚠️ PRODUCT_MANAGER_SYSTEM_PROMPT: 4 healthcare term(s)
+      [PRODUCT_MANAGER_SYSTEM_PROMPT] Term: 'patient' → ...nd_Objectives": [     "Measurable objective 1 (e.g., Reduce patient wait time by 40% within 6 months)",     "Measurable objecti...
+      [PRODUCT_MANAGER_SYSTEM_PROMPT] Term: 'EHR' → ...nts": [     "Constraint 1 (e.g., Must integrate with legacy EHR system via HL7)",     "Constraint 2"   ],    "Success_Metri...
+      [PRODUCT_MANAGER_SYSTEM_PROMPT] Term: 'HL7' → ...nstraint 1 (e.g., Must integrate with legacy EHR system via HL7)",     "Constraint 2"   ],    "Success_Metrics": [     "KPI...
+      [PRODUCT_MANAGER_SYSTEM_PROMPT] Term: 'HIPAA' → ...upport.",     "Compliance": "Regulatory requirements (e.g., HIPAA, GDPR, SOC2) if applicable."   },    "Core_Features": [...
+  ✅ ROADMAP_AGENT_SYSTEM_PROMPT: clean
+  ✅ SPRINT_PLANNING_AGENT_SYSTEM_PROMPT: clean
+  ✅ SRS_AGENT_SYSTEM_PROMPT: clean
+
+  ⚠️ USER_STORY_AGENT_SYSTEM_PROMPT: 3 healthcare term(s)
+      [USER_STORY_AGENT_SYSTEM_PROMPT] Term: 'Patient' → ...st use real persona names from the Business Analysis (e.g. "Patient David", "Dr. Sarah"), not generic terms like "user" or "adm...
+      [USER_STORY_AGENT_SYSTEM_PROMPT] Term: 'Clinical' → ...": "The exact user persona from the Business Analysis (e.g. Clinical Practitioner Sarah)",       "action": "What the persona wan...
+      [USER_STORY_AGENT_SYSTEM_PROMPT] Term: 'Practitioner' → ...xact user persona from the Business Analysis (e.g. Clinical Practitioner Sarah)",       "action": "What the persona wants to do (I w...
+  ✅ WORKSPACE_CHAT_SYSTEM_PROMPT: clean
+  ✅ WORKSPACE_EDITOR_SYSTEM_PROMPT: clean

@@ -2,7 +2,7 @@ import streamlit as st
 from typing import Tuple, Dict, Any
 from ui.forms import render_project_configuration, render_execution_mode
 from ui.output import render_project_deliverables
-from backend.orchestrator import generate_prd
+from backend.orchestrator import generate_prd, infer_project_metadata
 
 def render_hero() -> None:
     """Renders the top branding header with updated visual hierarchy."""
@@ -19,7 +19,7 @@ def render_idea_input() -> str:
     idea = st.text_area(
         "Describe your product idea",
         value=st.session_state['idea_input'],
-        placeholder="Example:\nBuild a healthcare platform where patients can consult doctors online, manage prescriptions, schedule appointments, and receive AI-powered health recommendations.",
+        placeholder="Examples:\n- An AI tutoring platform that adapts to each student's learning style\n- A hyper-local food delivery marketplace with eco-friendly drone shipping\n- An automated inventory management system with real-time sensor tracking\n- A personal finance assistant that automates budgeting and investing\n- A smart farming platform that monitors soil and predicts harvest cycles",
         height=130
     )
     
@@ -58,12 +58,33 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
     with col_mid:
         if st.button("Create Blueprint →", type="primary", use_container_width=True):
             if idea.strip():
+                # ── Resolve Auto Detect fields ──────────────────────────────
+                resolved_industry = industry
+                resolved_product_type = product_type
+                resolved_audience = audience
+                
+                needs_inference = (
+                    industry == "Auto Detect" or
+                    product_type == "Auto Detect" or
+                    audience == "Auto Detect"
+                )
+                
+                if needs_inference:
+                    with st.spinner("Detecting project metadata from your idea..."):
+                        inferred = infer_project_metadata(idea)
+                    if industry == "Auto Detect":
+                        resolved_industry = inferred.get("industry", "Other")
+                    if product_type == "Auto Detect":
+                        resolved_product_type = inferred.get("product_type", "SaaS Platform")
+                    if audience == "Auto Detect":
+                        resolved_audience = inferred.get("audience", "B2C")
+                
                 payload = {
                     "project": {
                         "idea": idea,
-                        "industry": industry,
-                        "product_type": product_type,
-                        "audience": audience,
+                        "industry": resolved_industry,
+                        "product_type": resolved_product_type,
+                        "audience": resolved_audience,
                         "deliverable": deliverable,
                         "detail_level": detail_level,
                         "risk_analysis": include_risk
@@ -78,15 +99,18 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                     # Derive a clean project name
                     proj_name = " ".join(idea.split()[:2]) + " Project"
                     
-                    # Store generated artifacts in session state
-                    # Only the PRD is generated initially — all others are None (lazy)
+                    # Reset projects dict and active ID
+                    st.session_state['projects'] = {}
+                    st.session_state['active_project_id'] = None
+                    
+                    # Store generated artifacts in session state with resolved values
                     st.session_state['projects'][proj_name] = {
                         "name": proj_name,
                         "metadata": "Active",
                         "idea": idea,
-                        "industry": industry,
-                        "product_type": product_type,
-                        "audience": audience,
+                        "industry": resolved_industry,
+                        "product_type": resolved_product_type,
+                        "audience": resolved_audience,
                         "business_analysis": result.get("business_analysis", {}),
                         "deliverables": result["data"]
                     }

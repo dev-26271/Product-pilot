@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import logging
 from abc import ABC, abstractmethod
@@ -8,6 +9,69 @@ from backend.agents.product_manager import generate_product_requirements
 from backend.api import create_project
 
 logger = logging.getLogger(__name__)
+
+
+def infer_project_metadata(idea: str) -> Dict[str, str]:
+    """Infers industry, product_type, and audience from a product idea using the LLM.
+    
+    Called when any of the three project configuration fields is set to 'Auto Detect'.
+    Uses a lightweight, single-shot LLM call with a tightly constrained JSON schema
+    to classify the idea. Falls back to sensible defaults on failure.
+    
+    Args:
+        idea (str): The raw product idea text from the user.
+        
+    Returns:
+        dict: Keys 'industry', 'product_type', 'audience' with inferred string values.
+    """
+    from backend.llm import get_llm
+    
+    system_prompt = """You are a product classifier. Given a product idea, return a JSON object with exactly three keys:
+
+{
+  "industry": "<one of: Healthcare, Finance, Education, Retail, Logistics, Travel, Real Estate, HR, Legal, Entertainment, Food & Beverage, Agriculture, Government, Technology, Other>",
+  "product_type": "<one of: SaaS Platform, Mobile App, AI Assistant, Marketplace, Dashboard, Internal Tool, API Platform, Enterprise Software, CRM, Productivity Tool>",
+  "audience": "<one of: B2B, B2C, Enterprise, Internal, Government>"
+}
+
+Rules:
+- Return ONLY the raw JSON object. No markdown, no backticks, no explanation.
+- Pick the single best match for each field based on the product idea.
+- If uncertain, choose the closest reasonable option."""
+
+    user_message = f"Product idea: {idea}"
+    
+    try:
+        llm = get_llm()
+        response = llm.invoke([
+            ("system", system_prompt),
+            ("user", user_message),
+        ])
+        raw = response.content.strip()
+        
+        # Strip code fences if present
+        if raw.startswith("```"):
+            lines = raw.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            raw = "\n".join(lines).strip()
+        
+        data = json.loads(raw)
+        logger.info(f"Inferred project metadata: {data}")
+        return {
+            "industry": data.get("industry", "Other"),
+            "product_type": data.get("product_type", "SaaS Platform"),
+            "audience": data.get("audience", "B2C"),
+        }
+    except Exception as e:
+        logger.warning(f"Metadata inference failed, using defaults: {e}")
+        return {
+            "industry": "Other",
+            "product_type": "SaaS Platform",
+            "audience": "B2C",
+        }
 
 class OrchestrationStrategy(ABC):
     """Abstract Strategy interface for routing the multi-agent pipeline execution."""
