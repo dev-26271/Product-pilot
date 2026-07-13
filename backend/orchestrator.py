@@ -265,6 +265,13 @@ class PythonLocalStrategy(OrchestrationStrategy):
                 else:
                     logger.warning("Max PM self-repair loop attempts reached. Proceeding with current PRD.")
         
+        # 6. Step 5: Planning Agent execution
+        planning_agent = registry.get("planning_agent")
+        try:
+            context = planning_agent.execute(context)
+        except Exception as e:
+            logger.error(f"Planning Agent execution failed during orchestration: {e}")
+            
         total_duration = time.perf_counter() - start_time
         logger.info(f"Initial Multi-Agent PRD pipeline completed in {total_duration:.4f} seconds.")
         
@@ -272,12 +279,19 @@ class PythonLocalStrategy(OrchestrationStrategy):
         import copy
         from datetime import datetime
         if "version_history" not in context.metadata:
+            # Build initial snapshot dictionary
+            snapshot_ctx = context.clone()
+            snapshot_ctx.metadata.pop("pending_changes", None)
+            snapshot_ctx.metadata.pop("pending_approval", None)
+            snapshot_dict = snapshot_ctx.to_dict()
+            
             context.metadata["version_history"] = [
                 {
                     "version": 1,
                     "description": "Initial Multi-Agent Generation",
                     "timestamp": datetime.now().isoformat(),
-                    "deliverables": copy.deepcopy(context.deliverables)
+                    "deliverables": copy.deepcopy(context.deliverables),
+                    "snapshot": snapshot_dict
                 }
             ]
             

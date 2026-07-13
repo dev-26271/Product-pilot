@@ -93,12 +93,32 @@ User: {user_message}
         if is_refinement:
             analyzer = DependencyAnalyzer()
             affected = analyzer.analyze(user_message)
-            new_metadata["pending_changes"] = {
+            
+            # Detect destructive/critical scope changes needing human confirmation
+            msg_lower = user_message.lower()
+            destructive_keywords = [
+                "delete", "remove", "change persona", "target audience", "pricing", 
+                "pricing model", "billing", "sso", "authentication", "replace"
+            ]
+            requires_approval = any(kw in msg_lower for kw in destructive_keywords) or sum(affected.values()) > 3
+            
+            proposal_dict = {
                 "instruction": user_message,
-                "affected": affected
+                "affected": affected,
+                "impact": "Destructive update affecting core deliverables (e.g. personas, target audience, pricing models)." if requires_approval else "Incremental spec optimization.",
+                "regeneration_time": "15-30s",
+                "requires_approval": requires_approval
             }
+            
+            if requires_approval:
+                new_metadata["pending_approval"] = proposal_dict
+                new_metadata.pop("pending_changes", None)
+            else:
+                new_metadata["pending_changes"] = proposal_dict
+                new_metadata.pop("pending_approval", None)
         else:
             new_metadata.pop("pending_changes", None)
+            new_metadata.pop("pending_approval", None)
             
         # Standardize chat history storage
         if "chat_history" not in new_metadata:
@@ -204,13 +224,36 @@ def apply_workspace_refinements(
         context.metadata["version_history"] = []
     
     new_version_num = len(context.metadata["version_history"]) + 1
+    
+    # Snapshot the complete context state, excluding circular / transient references
+    snapshot_ctx = context.clone()
+    snapshot_ctx.metadata.pop("pending_changes", None)
+    snapshot_ctx.metadata.pop("pending_approval", None)
+    snapshot_dict = snapshot_ctx.to_dict()
+    
     version_entry = {
         "version": new_version_num,
         "description": instruction,
         "timestamp": datetime.now().isoformat(),
-        "deliverables": copy.deepcopy(context.deliverables)
+        "deliverables": copy.deepcopy(context.deliverables),
+        "snapshot": snapshot_dict
     }
     context.metadata["version_history"].append(version_entry)
+    
+    # 4. Log to Decision Log
+    if "decision_log" not in context.metadata:
+        context.metadata["decision_log"] = []
+        
+    decision_entry = {
+        "id": f"DEC-{len(context.metadata['decision_log']) + 1:03d}",
+        "timestamp": datetime.now().isoformat(),
+        "agent": "WorkspaceChatAgent",
+        "reason": instruction,
+        "user_approval": True,
+        "affected_documents": [doc for doc, affected in affected_flags.items() if affected],
+        "rollback_version": new_version_num
+    }
+    context.metadata["decision_log"].append(decision_entry)
     
     # Clear pending changes
     context.metadata.pop("pending_changes", None)

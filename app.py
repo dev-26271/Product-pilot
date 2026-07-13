@@ -89,11 +89,14 @@ def main():
     load_custom_css()
     render_sidebar()
     
-    # Check sidebar view selection to toggle between Workspace and RAG Inspector diagnostics page
+    # Check sidebar view selection to toggle between views
     view_mode = st.session_state.get("nav_page_selection", "Workspace")
     if view_mode == "RAG Inspector":
         from ui.output import render_rag_inspector
         render_rag_inspector()
+    elif view_mode == "Dashboard":
+        from ui.output import render_workspace_dashboard
+        render_workspace_dashboard()
     else:
         render_home()
 
