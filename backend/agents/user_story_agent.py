@@ -1,12 +1,9 @@
-import json
 import logging
-import time
-from datetime import datetime
 from typing import Dict, Any, List
 
-from backend.agent_registry import BaseAgent, registry
+from backend.agent_registry import registry
 from backend.workspace_context import WorkspaceContext
-from backend.llm import get_llm
+from backend.agents.base_document_agent import BaseDocumentAgent
 from backend.prompts import USER_STORY_AGENT_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -19,19 +16,6 @@ VALID_COMPLEXITIES    = {"Low", "Medium", "High"}
 VALID_RISKS           = {"Low", "Medium", "High"}
 VALID_RELEASES        = {"MVP", "Phase 1", "Phase 2", "Phase 3"}
 FIBONACCI_POINTS      = {1, 2, 3, 5, 8, 13}
-
-
-def _strip_fences(text: str) -> str:
-    """Removes markdown code fences (```json ... ```) that some models return."""
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-    return text
 
 
 def _validate_epic(epic: Dict[str, Any], idx: int) -> List[str]:
@@ -108,59 +92,39 @@ def _validate_story(story: Dict[str, Any], idx: int) -> List[str]:
     return warnings
 
 
-class UserStoryAgent(BaseAgent):
+class UserStoryAgent(BaseDocumentAgent):
     """User Story Agent that generates Agile epics and user stories grounded in Intent and PRD."""
     
-    def execute(self, context: WorkspaceContext, **kwargs) -> WorkspaceContext:
-        logger.info("Executing UserStoryAgent...")
-        start_time = time.perf_counter()
+    @property
+    def required_inputs(self) -> List[str]:
+        return ["prd", "business_analysis"]
         
-        # Verify PRD is populated
-        if not context.prd:
-            raise ValueError(
-                "User Story Agent requires a generated PRD. "
-                "Please generate the PRD first before requesting User Stories."
-            )
-            
-        user_message = f"""=== INTENT CONTEXT (Canonical Source of Truth) ===
-{json.dumps(context.intent_context, indent=2)}
+    @property
+    def output_schema_keys(self) -> List[str]:
+        return ["epics", "stories"]
+        
+    @property
+    def system_prompt(self) -> str:
+        return USER_STORY_AGENT_SYSTEM_PROMPT
+        
+    @property
+    def agent_name(self) -> str:
+        return "UserStoryAgent"
+        
+    @property
+    def deliverable_key(self) -> str:
+        return "User Stories"
+        
+    @property
+    def wrap_content(self) -> bool:
+        # User stories is cached raw (no content dict wrapper) in deliverables
+        return False
 
-=== BUSINESS ANALYSIS ===
-{json.dumps(context.business_analysis, indent=2)}
-
-=== PRODUCT REQUIREMENTS DOCUMENT ===
-{json.dumps(context.prd, indent=2)}
-"""
-        
-        llm = get_llm()
-        model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
-        messages = [
-            ("system", USER_STORY_AGENT_SYSTEM_PROMPT),
-            ("user", user_message)
-        ]
-        
-        try:
-            response = llm.invoke(messages)
-            raw_text = response.content.strip()
-            
-            # Clean fences
-            raw_text = _strip_fences(raw_text)
-            data = json.loads(raw_text)
-        except Exception as e:
-            logger.error(f"User Story Agent LLM invoke or parse failed: {e}")
-            raise RuntimeError(f"User Story generation failed: {e}") from e
-            
-        # Validate schema keys
-        if "epics" not in data or not isinstance(data["epics"], list) or len(data["epics"]) == 0:
-            raise ValueError("Response missing required 'epics' array or it is empty.")
-        if "stories" not in data or not isinstance(data["stories"], list) or len(data["stories"]) == 0:
-            raise ValueError("Response missing required 'stories' array or it is empty.")
-            
-        # Field-level validation warnings
+    def post_processing(self, parsed_json: Dict[str, Any], context: WorkspaceContext) -> WorkspaceContext:
         all_warnings: List[str] = []
-        for idx, epic in enumerate(data["epics"]):
+        for idx, epic in enumerate(parsed_json.get("epics", [])):
             all_warnings.extend(_validate_epic(epic, idx))
-        for idx, story in enumerate(data["stories"]):
+        for idx, story in enumerate(parsed_json.get("stories", [])):
             all_warnings.extend(_validate_story(story, idx))
             
         if all_warnings:
@@ -168,27 +132,7 @@ class UserStoryAgent(BaseAgent):
                 f"User Story Agent: {len(all_warnings)} validation warning(s) on generated output:\n"
                 + "\n".join(f"  ⚠ {w}" for w in all_warnings)
             )
-            
-        duration_ms = int((time.perf_counter() - start_time) * 1000)
-        
-        # Log entry
-        log_entry = {
-            "agent": "UserStoryAgent",
-            "model": model_name,
-            "latency_ms": duration_ms,
-            "tokens": len(raw_text) // 4 if 'raw_text' in locals() else 0,
-            "confidence": 0.95,
-            "timestamp": datetime.now().isoformat(),
-            "version": "2.0.0"
-        }
-        
-        # Store in deliverables list under 'User Stories' key directly (no wrapping)
-        new_deliverables = context.deliverables.copy()
-        new_deliverables["User Stories"] = data
-        
-        return context.clone(
-            deliverables=new_deliverables
-        ).add_agent_log(log_entry)
+        return context
 
 # Auto-register agent
 registry.register("user_story", UserStoryAgent())

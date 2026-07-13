@@ -1,77 +1,31 @@
-import json
-import time
-import logging
-from datetime import datetime
-from typing import Dict, Any
-
-from backend.agent_registry import BaseAgent, registry
+from typing import Dict, Any, List
+from backend.agent_registry import registry
 from backend.workspace_context import WorkspaceContext
-from backend.llm import get_llm
+from backend.agents.base_document_agent import BaseDocumentAgent
 from backend.prompts import BRD_AGENT_SYSTEM_PROMPT
 
-logger = logging.getLogger(__name__)
-
-class BRDAgent(BaseAgent):
-    """BRD Agent that generates the Business Requirements Document (BRD) using Intent, BA, and PRD."""
+class BRDAgent(BaseDocumentAgent):
+    """Agent that generates the Business Requirements Document (BRD)."""
     
-    def execute(self, context: WorkspaceContext, **kwargs) -> WorkspaceContext:
-        logger.info("Executing BRDAgent...")
-        start_time = time.perf_counter()
+    @property
+    def required_inputs(self) -> List[str]:
+        return ["prd", "business_analysis"]
         
-        user_message = f"""=== INTENT CONTEXT (Canonical Source of Truth) ===
-{json.dumps(context.intent_context, indent=2)}
-
-=== BUSINESS ANALYSIS ===
-{json.dumps(context.business_analysis, indent=2)}
-
-=== PRODUCT REQUIREMENTS DOCUMENT ===
-{json.dumps(context.prd, indent=2)}
-"""
+    @property
+    def output_schema_keys(self) -> List[str]:
+        return ["📈 Market Overview", "💰 Financial Model", "🔒 Compliance & Policy"]
         
-        llm = get_llm()
-        model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
-        messages = [
-            ("system", BRD_AGENT_SYSTEM_PROMPT),
-            ("user", user_message)
-        ]
+    @property
+    def system_prompt(self) -> str:
+        return BRD_AGENT_SYSTEM_PROMPT
         
-        try:
-            response = llm.invoke(messages)
-            raw_text = response.content.strip()
-            
-            # Clean fences
-            if raw_text.startswith("```"):
-                lines = raw_text.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                raw_text = "\n".join(lines).strip()
-                
-            data = json.loads(raw_text)
-        except Exception as e:
-            logger.error(f"BRD Agent LLM invoke or parse failed: {e}")
-            raise RuntimeError(f"BRD generation failed: {e}") from e
-            
-        duration_ms = int((time.perf_counter() - start_time) * 1000)
+    @property
+    def agent_name(self) -> str:
+        return "BRDAgent"
         
-        # Log entry
-        log_entry = {
-            "agent": "BRDAgent",
-            "model": model_name,
-            "latency_ms": duration_ms,
-            "tokens": len(raw_text) // 4 if 'raw_text' in locals() else 0,
-            "confidence": 0.95,
-            "timestamp": datetime.now().isoformat(),
-            "version": "2.0.0"
-        }
-        
-        new_deliverables = context.deliverables.copy()
-        new_deliverables["Business Requirements Document (BRD)"] = {"content": data}
-        
-        return context.clone(
-            deliverables=new_deliverables
-        ).add_agent_log(log_entry)
+    @property
+    def deliverable_key(self) -> str:
+        return "Business Requirements Document (BRD)"
 
 # Auto-register agent
 registry.register("brd", BRDAgent())
