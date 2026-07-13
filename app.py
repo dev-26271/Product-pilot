@@ -97,6 +97,9 @@ def main():
     elif view_mode == "Dashboard":
         from ui.output import render_workspace_dashboard
         render_workspace_dashboard()
+    elif view_mode == "Traceability Explorer":
+        from ui.output import render_traceability_explorer
+        render_traceability_explorer()
     else:
         render_home()
 

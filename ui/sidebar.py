@@ -20,7 +20,7 @@ def render_sidebar() -> None:
             
         # Navigation Section
         st.markdown("<div class='sidebar-section-header'>Navigation</div>", unsafe_allow_html=True)
-        st.selectbox("Select View", ["Workspace", "Dashboard", "RAG Inspector"], key="nav_page_selection")
+        st.selectbox("Select View", ["Workspace", "Dashboard", "Traceability Explorer", "RAG Inspector"], key="nav_page_selection")
         
         # Projects Section
         st.markdown("<div class='sidebar-section-header'>Projects</div>", unsafe_allow_html=True)
