@@ -1,7 +1,7 @@
 import streamlit as st
 from typing import Tuple, Dict, Any
 from ui.forms import render_project_configuration, render_execution_mode
-from ui.output import render_project_deliverables
+from ui.output import render_project_deliverables, render_chat_refinement
 from backend.orchestrator import generate_prd, infer_project_metadata
 
 def render_hero() -> None:
@@ -192,3 +192,4 @@ def render_home() -> None:
         project = st.session_state['projects'][active_id]
         render_project_header(project)
         render_project_deliverables(project)
+        render_chat_refinement(project)

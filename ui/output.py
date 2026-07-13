@@ -455,3 +455,123 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
                                 st.error(f"Failed to generate {tab_name}: {e}")
 
 
+def render_chat_refinement(project: Dict[str, Any]) -> None:
+    """Renders the chat interface, dependency analyzer summary, confirmation, and version logs."""
+    from datetime import datetime
+    import streamlit as st
+    
+    st.markdown("<hr style='border-top: 1px solid #2A2A2A; margin: 3rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>💬 Chat & Refinement Strategy</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.5rem;'>Ask questions about the deliverables or suggest edits (e.g., 'Add subscription billing', 'Target enterprise customers'). The PM Agent will detect dependencies and propose document updates.</p>", unsafe_allow_html=True)
+
+    # 1. Initialize metadata lists if not present
+    if "metadata" not in project:
+        project["metadata"] = {}
+    if "chat_history" not in project["metadata"]:
+        project["metadata"]["chat_history"] = []
+    if "version_history" not in project["metadata"]:
+        project["metadata"]["version_history"] = [
+            {
+                "version": 1,
+                "description": "Initial Multi-Agent Generation",
+                "timestamp": datetime.now().isoformat(),
+                "deliverables": project.get("deliverables", {}).copy()
+            }
+        ]
+
+    chat_history = project["metadata"]["chat_history"]
+    pending_changes = project["metadata"].get("pending_changes")
+
+    # 2. Display Chat Messages
+    chat_container = st.container()
+    with chat_container:
+        for msg in chat_history:
+            role = msg["role"]
+            content = msg["content"]
+            with st.chat_message(role):
+                st.markdown(content)
+
+    # 3. Render Pending Changes Summary if detected
+    if pending_changes:
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        st.markdown("""
+            <div style='background-color: #1E1E1E; border-left: 4px solid #FF8C00; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;'>
+                <h5 style='color: #FF8C00; margin: 0 0 0.5rem 0; font-weight: 600;'>⚠️ Proposed Refinements Detected</h5>
+                <p style='color: #D1D5DB; font-size: 0.85rem; margin-bottom: 0.75rem;'>The PM Agent analyzed your request and detected the following document updates:</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Display list of changes
+        for k, v in pending_changes["affected"].items():
+            doc_label = k.replace("_", " ").title()
+            if v:
+                st.markdown(f"🟢 **{doc_label}** — Will be regenerated")
+            else:
+                st.markdown(f"⚪ *{doc_label}* — Unaffected (No change)")
+                
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        col1, col2 = st.columns([1.5, 4])
+        with col1:
+            if st.button("Confirm & Apply", type="primary", key="confirm_refinement_btn", use_container_width=True):
+                with st.spinner("Applying refinements across workspace..."):
+                    try:
+                        from backend.agents.workspace_chat import apply_workspace_refinements
+                        updated_workspace = apply_workspace_refinements(
+                            workspace_dict=project,
+                            instruction=pending_changes["instruction"],
+                            affected_flags=pending_changes["affected"]
+                        )
+                        # Sync updated workspace back to session state
+                        active_id = st.session_state.get('active_project_id')
+                        st.session_state['projects'][active_id] = updated_workspace
+                        st.success("Refinements applied successfully!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to apply refinements: {e}")
+        with col2:
+            if st.button("Cancel Refinement", type="secondary", key="cancel_refinement_btn"):
+                project["metadata"].pop("pending_changes", None)
+                st.rerun()
+                
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+
+    # 4. Chat Input Box (Disabled if pending changes are awaiting confirmation)
+    user_input = st.chat_input(
+        placeholder="Type a message or edit request..." if not pending_changes else "Please confirm or cancel the pending refinements first...",
+        disabled=bool(pending_changes)
+    )
+
+    if user_input:
+        with st.spinner("PM Agent is analyzing your request..."):
+            try:
+                from backend.agents.workspace_chat import chat_refine_workspace
+                res = chat_refine_workspace(
+                    workspace=project,
+                    chat_history=chat_history,
+                    user_message=user_input
+                )
+                # Sync response deliverables and metadata back to session state
+                project["deliverables"] = res["deliverables"]
+                project["metadata"] = res["metadata"]
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to refine workspace: {e}")
+
+    # 5. Version History Section
+    st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
+    with st.expander("📜 Workspace Version History", expanded=False):
+        for v in reversed(project["metadata"]["version_history"]):
+            desc = v["description"]
+            ts = v["timestamp"][:19].replace("T", " ")
+            st.markdown(
+                f"<div style='padding: 0.5rem 0; border-bottom: 1px solid #2A2A2A;'>"
+                f"<span style='color: #4F8CFF; font-weight: 600;'>Version {v['version']}</span> "
+                f"<span style='color: #9E9E9E; font-size: 0.8rem;'>({ts})</span>"
+                f"<div style='font-size: 0.9rem; color: #F5F5F5; margin-top: 0.25rem;'>{desc}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+
+

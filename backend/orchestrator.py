@@ -218,6 +218,18 @@ class PythonLocalStrategy(OrchestrationStrategy):
         logger.info(f"Initial Multi-Agent PRD pipeline completed in {total_duration:.4f} seconds.")
         
         # Return serializable dict output maintaining backwards compatibility with UI
+        import copy
+        from datetime import datetime
+        if "version_history" not in context.metadata:
+            context.metadata["version_history"] = [
+                {
+                    "version": 1,
+                    "description": "Initial Multi-Agent Generation",
+                    "timestamp": datetime.now().isoformat(),
+                    "deliverables": copy.deepcopy(context.deliverables)
+                }
+            ]
+            
         res_dict = context.to_dict()
         res_dict["success"] = True
         res_dict["data"] = context.deliverables
