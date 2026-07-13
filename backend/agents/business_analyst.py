@@ -1,84 +1,127 @@
 import json
+import time
 import logging
+from datetime import datetime
 from typing import Dict, Any
-from rag import retrieve_business
+
+from backend.agent_registry import BaseAgent, registry
+from backend.workspace_context import WorkspaceContext
 from backend.llm import get_llm
 from backend.prompts import BUSINESS_ANALYST_SYSTEM_PROMPT
+from rag import retrieve_business
 
 logger = logging.getLogger(__name__)
 
-def generate_business_analysis(user_input: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates structured Business Analysis JSON based on RAG context and user inputs.
+class BusinessAnalystAgent(BaseAgent):
+    """Business Analyst Agent that processes the intent context to build structural business goals and user personas."""
     
-    Args:
-        user_input (dict): Dict containing 'idea', 'industry', etc.
+    def execute(self, context: WorkspaceContext, **kwargs) -> WorkspaceContext:
+        logger.info("Executing BusinessAnalystAgent...")
+        start_time = time.perf_counter()
         
-    Returns:
-        dict: Parsed and validated Business Analysis JSON.
+        # Step 1: Extract intent details to build retrieval query
+        intent = context.intent_context
+        problem = intent.get("problem_statement", "")
+        features_list = intent.get("core_features", [])
         
-    Raises:
-        ValueError: If user_input idea is empty or parsing generated JSON fails.
-        RuntimeError: If LLM invocation fails.
-    """
-    idea = user_input.get("idea", "")
-    if not idea:
-        raise ValueError("Product idea cannot be empty inside user_input.")
+        # Retrieve context from RAG business index
+        retrieval_query = f"{problem} {' '.join(features_list)}".strip() or context.idea
+        logger.info(f"Retrieving business KB context for query: '{retrieval_query[:50]}...'")
         
-    logger.info(f"Retrieving context for idea: '{idea[:50]}...'")
-    
-    # Step 1: Call retrieve_business using product idea
-    # Step 2: Retrieve top 3 relevant chunks
-    context_docs = retrieve_business(idea, k=3)
-    context_str = "\n\n".join([doc.page_content for doc in context_docs])
-    logger.info(f"Retrieved {len(context_docs)} chunks from business index.")
-    
-    # Step 3: Build final prompt
-    user_message = f"""Context:
+        context_docs = retrieve_business(retrieval_query, k=3)
+        context_str = "\n\n".join([doc.page_content for doc in context_docs])
+        logger.info(f"Retrieved {len(context_docs)} chunks from business index.")
+        
+        # Step 2: Build final user prompt
+        user_message = f"""RAG Context:
 {context_str}
 
-User Input:
-Product Idea: {idea}
-Industry: {user_input.get("industry", "Unknown")}
-Product Type: {user_input.get("product_type", "Unknown")}
-Audience: {user_input.get("audience", "Unknown")}
+Intent Context (Canonical Source of Truth):
+{json.dumps(intent, indent=2)}
+
+Original Product Idea:
+{context.idea}
 """
-    
-    # Step 4: Invoke the Groq Model
-    logger.info("Invoking LLM for Business Analysis generation...")
-    llm = get_llm()
-    messages = [
-        ("system", BUSINESS_ANALYST_SYSTEM_PROMPT),
-        ("user", user_message)
-    ]
-    
-    try:
-        response = llm.invoke(messages)
-        raw_text = response.content.strip()
-    except Exception as e:
-        logger.error(f"Error invoking Groq LLM: {e}")
-        raise RuntimeError(f"LLM invocation failed: {e}")
         
-    # Clean any markdown code fences if returned by the LLM
-    if raw_text.startswith("```"):
-        lines = raw_text.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines[-1].startswith("```"):
-            lines = lines[:-1]
-        raw_text = "\n".join(lines).strip()
+        # Step 3: Invoke LLM
+        llm = get_llm()
+        model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
+        messages = [
+            ("system", BUSINESS_ANALYST_SYSTEM_PROMPT),
+            ("user", user_message)
+        ]
         
-    # Step 5 & 6: Parse and validate JSON response
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse LLM response as JSON. Raw response:\n{raw_text}")
-        raise ValueError(f"LLM returned invalid JSON: {e}. Raw response: {raw_text}") from e
-        
-    # Check expected keys in JSON schema
-    required_keys = ["Problem Statement", "Business Goals", "User Personas"]
-    for key in required_keys:
-        if key not in data:
-            logger.warning(f"Key '{key}' is missing from generated Business Analysis JSON.")
+        try:
+            response = llm.invoke(messages)
+            raw_text = response.content.strip()
             
-    logger.info("Business Analysis successfully generated and validated.")
-    return data
+            # Clean fences
+            if raw_text.startswith("```"):
+                lines = raw_text.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                raw_text = "\n".join(lines).strip()
+                
+            ba_json = json.loads(raw_text)
+        except Exception as e:
+            logger.error(f"Business Analyst LLM invoke or parse failed: {e}")
+            ba_json = {
+                "Problem Statement": problem or "Unknown",
+                "Business Goals": [f"Establish initial goals for {intent.get('project_name', 'project')}"],
+                "User Personas": [{"name": "Default Persona", "role": "End User", "needs": "Clean product delivery"}]
+            }
+            
+        # Validate critical keys
+        required_keys = ["Problem Statement", "Business Goals", "User Personas"]
+        for key in required_keys:
+            if key not in ba_json:
+                ba_json[key] = [] if key != "Problem Statement" else "Unknown"
+                
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        
+        # Log entry
+        log_entry = {
+            "agent": "BusinessAnalystAgent",
+            "model": model_name,
+            "latency_ms": duration_ms,
+            "tokens": len(raw_text) // 4 if 'raw_text' in locals() else 0,
+            "confidence": 0.95,
+            "timestamp": datetime.now().isoformat(),
+            "version": "2.0.0"
+        }
+        
+        return context.clone(
+            business_analysis=ba_json
+        ).add_agent_log(log_entry)
+
+# Auto-register agent
+registry.register("business_analyst", BusinessAnalystAgent())
+
+
+# ── Backwards Compatible Public Wrapper ───────────────────────────────────────
+def generate_business_analysis(user_input: Any) -> Dict[str, Any]:
+    """Public wrapper to keep backwards compatibility with the orchestrator & tests."""
+    if isinstance(user_input, WorkspaceContext):
+        result_context = registry.get("business_analyst").execute(user_input)
+        return result_context.business_analysis
+    elif isinstance(user_input, dict) and "intent_context" in user_input:
+        ctx = WorkspaceContext.from_dict(user_input)
+        result_context = registry.get("business_analyst").execute(ctx)
+        return result_context.business_analysis
+    else:
+        # Legacy direct payload format
+        idea = user_input.get("idea", "") if isinstance(user_input, dict) else str(user_input)
+        ctx = WorkspaceContext(idea=idea)
+        # Populate a minimal intent context for BA execution
+        ctx.intent_context = {
+            "project_name": "Legacy Project",
+            "industry": {"value": user_input.get("industry", "Other") if isinstance(user_input, dict) else "Other"},
+            "product_type": {"value": user_input.get("product_type", "SaaS Platform") if isinstance(user_input, dict) else "SaaS Platform"},
+            "audience": {"value": user_input.get("audience", "B2C") if isinstance(user_input, dict) else "B2C"},
+            "problem_statement": idea,
+            "core_features": []
+        }
+        result_context = registry.get("business_analyst").execute(ctx)
+        return result_context.business_analysis

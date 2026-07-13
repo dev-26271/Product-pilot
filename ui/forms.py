@@ -1,6 +1,7 @@
 import streamlit as st
 from typing import Tuple
 
+
 def render_project_configuration() -> Tuple[str, str, str, str, str, bool]:
     """Renders the project configuration panel inside st.expander."""
     with st.expander("Project Configuration", expanded=False):

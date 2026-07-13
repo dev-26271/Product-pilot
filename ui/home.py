@@ -58,7 +58,7 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
     with col_mid:
         if st.button("Create Blueprint →", type="primary", use_container_width=True):
             if idea.strip():
-                # ── Resolve Auto Detect fields ──────────────────────────────
+                # ── Resolve Auto Detect fields via lightweight classifier ──
                 resolved_industry = industry
                 resolved_product_type = product_type
                 resolved_audience = audience
@@ -92,7 +92,7 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                     "mode": execution_mode
                 }
                 
-                with st.spinner("ProductPilot generating PRD..."):
+                with st.spinner("ProductPilot generating PRD & Auditing Alignment..."):
                     result = generate_prd(payload)
                 
                 if result.get("success"):
@@ -103,7 +103,7 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                     st.session_state['projects'] = {}
                     st.session_state['active_project_id'] = None
                     
-                    # Store generated artifacts in session state with resolved values
+                    # Store context dictionary in session state directly
                     st.session_state['projects'][proj_name] = {
                         "name": proj_name,
                         "metadata": "Active",
@@ -111,11 +111,15 @@ def render_generate_button(idea: str, config: Tuple[str, str, str, str, str, boo
                         "industry": resolved_industry,
                         "product_type": resolved_product_type,
                         "audience": resolved_audience,
+                        "intent_context": result.get("intent_context", {}),
                         "business_analysis": result.get("business_analysis", {}),
-                        "deliverables": result["data"]
+                        "prd": result.get("prd", {}),
+                        "deliverables": result["data"],
+                        "agent_logs": result.get("agent_logs", []),
+                        "metadata_context": result.get("metadata", {})
                     }
                     st.session_state['active_project_id'] = proj_name
-                    st.success("PRD generated — workspace ready!")
+                    st.success("Validated PRD generated — workspace ready!")
                     st.rerun()
                 else:
                     st.error(f"Orchestration failed: {result.get('error')}")
@@ -133,16 +137,38 @@ def render_empty_state() -> None:
     """, unsafe_allow_html=True)
 
 def render_project_header(project: Dict[str, Any]) -> None:
-    """Renders active workspace details header directory."""
+    """Renders active workspace details header with confidence scores and validation badges."""
+    meta = project.get("metadata_context", {})
+    ind_conf = meta.get("industry_confidence")
+    pt_conf = meta.get("product_type_confidence")
+    aud_conf = meta.get("audience_confidence")
+    
+    # Validation status
+    val_report = meta.get("validation_report", {})
+    if val_report:
+        score = val_report.get("score", 1.0)
+        is_valid = val_report.get("valid", True)
+        if is_valid:
+            val_badge = f"<span style='color: #22C55E; font-weight: 600; margin-left: 10px;'>✓ Validated (Score: {score*100:.0f}%)</span>"
+        else:
+            val_badge = f"<span style='color: #EF4444; font-weight: 600; margin-left: 10px;'>⚠ Validation failed (Score: {score*100:.0f}%)</span>"
+    else:
+        val_badge = ""
+
+    ind_str = f"{project['industry']} ({(ind_conf*100):.0f}% conf)" if ind_conf is not None else project['industry']
+    pt_str = f"{project['product_type']} ({(pt_conf*100):.0f}% conf)" if pt_conf is not None else project['product_type']
+    aud_str = f"{project['audience']} ({(aud_conf*100):.0f}% conf)" if aud_conf is not None else project['audience']
+
     st.markdown(f"""
         <div style='margin-bottom: 2rem;'>
             <div style='font-size: 0.85rem; color: #4F8CFF; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;'>Active Workspace</div>
-            <h1 style='font-size: 2.5rem; font-weight: 800; color: #F5F5F5; margin-top: 0.25rem; letter-spacing: -0.03em;'>📁 {project['name']}</h1>
+            <h1 style='font-size: 2.5rem; font-weight: 800; color: #F5F5F5; margin-top: 0.25rem; letter-spacing: -0.03em; display: inline-block;'>📁 {project['name']}</h1>
+            {val_badge}
             <p style='color: #9E9E9E; font-size: 0.95rem; margin-top: 0.5rem;'>{project['idea']}</p>
             <div style='font-size: 0.8rem; color: #6B7280; margin-top: 0.5rem;'>
-                <strong>Industry:</strong> {project['industry']} | 
-                <strong>Product Type:</strong> {project['product_type']} | 
-                <strong>Audience:</strong> {project['audience']}
+                <strong>Industry:</strong> {ind_str} | 
+                <strong>Product Type:</strong> {pt_str} | 
+                <strong>Audience:</strong> {aud_str}
             </div>
         </div>
     """, unsafe_allow_html=True)

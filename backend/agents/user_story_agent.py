@@ -1,7 +1,11 @@
 import json
 import logging
+import time
+from datetime import datetime
 from typing import Dict, Any, List
 
+from backend.agent_registry import BaseAgent, registry
+from backend.workspace_context import WorkspaceContext
 from backend.llm import get_llm
 from backend.prompts import USER_STORY_AGENT_SYSTEM_PROMPT
 
@@ -104,119 +108,99 @@ def _validate_story(story: Dict[str, Any], idx: int) -> List[str]:
     return warnings
 
 
-def _build_user_message(workspace: Dict[str, Any]) -> str:
-    """Assembles the full user message from the workspace, including BA and PRD."""
+class UserStoryAgent(BaseAgent):
+    """User Story Agent that generates Agile epics and user stories grounded in Intent and PRD."""
+    
+    def execute(self, context: WorkspaceContext, **kwargs) -> WorkspaceContext:
+        logger.info("Executing UserStoryAgent...")
+        start_time = time.perf_counter()
+        
+        # Verify PRD is populated
+        if not context.prd:
+            raise ValueError(
+                "User Story Agent requires a generated PRD. "
+                "Please generate the PRD first before requesting User Stories."
+            )
+            
+        user_message = f"""=== INTENT CONTEXT (Canonical Source of Truth) ===
+{json.dumps(context.intent_context, indent=2)}
 
-    idea          = workspace.get("idea", "")
-    industry      = workspace.get("industry", "Unknown")
-    product_type  = workspace.get("product_type", "Unknown")
-    audience      = workspace.get("audience", "Unknown")
+=== BUSINESS ANALYSIS ===
+{json.dumps(context.business_analysis, indent=2)}
 
-    # Business Analysis — source of personas and business goals
-    business_analysis = workspace.get("business_analysis", {})
-
-    # PRD — primary source of truth for functional requirements
-    prd = workspace.get("deliverables", {}).get("Product Requirements Document (PRD)", {})
-    prd_content = prd.get("content", prd)  # support both wrapped and raw formats
-
-    return f"""=== PROJECT CONTEXT ===
-Product Idea: {idea}
-Industry: {industry}
-Product Type: {product_type}
-Target Audience: {audience}
-
-=== BUSINESS ANALYSIS (source of personas and business goals) ===
-{json.dumps(business_analysis, indent=2) if business_analysis else "Not available."}
-
-=== PRODUCT REQUIREMENTS DOCUMENT — PRIMARY SOURCE OF TRUTH ===
-{json.dumps(prd_content, indent=2) if prd_content else "Not available."}
-
-=== INSTRUCTIONS ===
-Generate Epics and User Stories that directly trace to the Functional Requirements above.
-Return ONLY the raw JSON object. No markdown. No prose. No code fences.
-Every story MUST include traceability.functional_requirements referencing exact FR IDs from the PRD.
+=== PRODUCT REQUIREMENTS DOCUMENT ===
+{json.dumps(context.prd, indent=2)}
 """
+        
+        llm = get_llm()
+        model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
+        messages = [
+            ("system", USER_STORY_AGENT_SYSTEM_PROMPT),
+            ("user", user_message)
+        ]
+        
+        try:
+            response = llm.invoke(messages)
+            raw_text = response.content.strip()
+            
+            # Clean fences
+            raw_text = _strip_fences(raw_text)
+            data = json.loads(raw_text)
+        except Exception as e:
+            logger.error(f"User Story Agent LLM invoke or parse failed: {e}")
+            raise RuntimeError(f"User Story generation failed: {e}") from e
+            
+        # Validate schema keys
+        if "epics" not in data or not isinstance(data["epics"], list) or len(data["epics"]) == 0:
+            raise ValueError("Response missing required 'epics' array or it is empty.")
+        if "stories" not in data or not isinstance(data["stories"], list) or len(data["stories"]) == 0:
+            raise ValueError("Response missing required 'stories' array or it is empty.")
+            
+        # Field-level validation warnings
+        all_warnings: List[str] = []
+        for idx, epic in enumerate(data["epics"]):
+            all_warnings.extend(_validate_epic(epic, idx))
+        for idx, story in enumerate(data["stories"]):
+            all_warnings.extend(_validate_story(story, idx))
+            
+        if all_warnings:
+            logger.warning(
+                f"User Story Agent: {len(all_warnings)} validation warning(s) on generated output:\n"
+                + "\n".join(f"  ⚠ {w}" for w in all_warnings)
+            )
+            
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        
+        # Log entry
+        log_entry = {
+            "agent": "UserStoryAgent",
+            "model": model_name,
+            "latency_ms": duration_ms,
+            "tokens": len(raw_text) // 4 if 'raw_text' in locals() else 0,
+            "confidence": 0.95,
+            "timestamp": datetime.now().isoformat(),
+            "version": "2.0.0"
+        }
+        
+        # Store in deliverables list under 'User Stories' key directly (no wrapping)
+        new_deliverables = context.deliverables.copy()
+        new_deliverables["User Stories"] = data
+        
+        return context.clone(
+            deliverables=new_deliverables
+        ).add_agent_log(log_entry)
+
+# Auto-register agent
+registry.register("user_story", UserStoryAgent())
 
 
-def generate_user_stories(workspace: Dict[str, Any]) -> Dict[str, Any]:
-    """Generates structured Agile Epics and User Stories from the workspace context.
-
-    Consumes:
-        - workspace["idea"]
-        - workspace["business_analysis"]
-        - workspace["deliverables"]["Product Requirements Document (PRD)"]
-
-    Returns:
-        dict: Validated structured JSON with top-level keys "epics" and "stories".
-
-    Raises:
-        ValueError: If the LLM returns invalid JSON or the schema fails critical validation.
-        RuntimeError: If the LLM invocation itself fails.
-    """
-    project_name = workspace.get("name", "Unknown Project")
-    logger.info(f"User Story Agent: starting generation for project '{project_name}'")
-
-    prd = workspace.get("deliverables", {}).get("Product Requirements Document (PRD)", {})
-    if not prd:
-        raise ValueError(
-            "User Story Agent requires a generated PRD. "
-            "Please generate the PRD first before requesting User Stories."
-        )
-
-    # ── Build and invoke LLM ────────────────────────────────────────────────
-    user_message = _build_user_message(workspace)
-    llm = get_llm()
-    messages = [
-        ("system", USER_STORY_AGENT_SYSTEM_PROMPT),
-        ("user",   user_message),
-    ]
-
-    try:
-        response = llm.invoke(messages)
-        raw_text = response.content.strip()
-    except Exception as e:
-        logger.error(f"User Story Agent: LLM invocation failed — {e}")
-        raise RuntimeError(f"LLM invocation failed: {e}") from e
-
-    # ── Strip fences and parse JSON ─────────────────────────────────────────
-    raw_text = _strip_fences(raw_text)
-
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError as e:
-        logger.error(
-            f"User Story Agent: failed to parse LLM response as JSON.\n"
-            f"JSONDecodeError: {e}\n"
-            f"Raw response (first 1000 chars):\n{raw_text[:1000]}"
-        )
-        raise ValueError(f"LLM returned invalid JSON: {e}") from e
-
-    # ── Top-level schema validation ──────────────────────────────────────────
-    if "epics" not in data or not isinstance(data["epics"], list) or len(data["epics"]) == 0:
-        raise ValueError("Response missing required 'epics' array or it is empty.")
-    if "stories" not in data or not isinstance(data["stories"], list) or len(data["stories"]) == 0:
-        raise ValueError("Response missing required 'stories' array or it is empty.")
-
-    # ── Field-level validation (non-fatal: log warnings only) ───────────────
-    all_warnings: List[str] = []
-
-    for idx, epic in enumerate(data["epics"]):
-        all_warnings.extend(_validate_epic(epic, idx))
-
-    for idx, story in enumerate(data["stories"]):
-        all_warnings.extend(_validate_story(story, idx))
-
-    if all_warnings:
-        logger.warning(
-            f"User Story Agent: {len(all_warnings)} validation warning(s) on generated output:\n"
-            + "\n".join(f"  ⚠ {w}" for w in all_warnings)
-        )
+# ── Backwards Compatible Public Wrapper ───────────────────────────────────────
+def generate_user_stories(workspace: Any) -> Dict[str, Any]:
+    """Public wrapper to keep backwards compatibility with the lazy UI loader."""
+    if isinstance(workspace, WorkspaceContext):
+        result_context = registry.get("user_story").execute(workspace)
+        return result_context.deliverables["User Stories"]
     else:
-        logger.info("User Story Agent: all epics and stories passed schema validation ✓")
-
-    logger.info(
-        f"User Story Agent: generation complete — "
-        f"{len(data['epics'])} epic(s), {len(data['stories'])} story(s)"
-    )
-
-    return data
+        ctx = WorkspaceContext.from_dict(workspace)
+        result_context = registry.get("user_story").execute(ctx)
+        return result_context.deliverables["User Stories"]

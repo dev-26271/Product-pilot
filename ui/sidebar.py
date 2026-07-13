@@ -10,9 +10,9 @@ def render_sidebar() -> None:
             st.session_state['active_project_id'] = None
             st.session_state['idea_input'] = ""
             # Reset all project configuration widgets to defaults
-            st.session_state['cfg_industry'] = "Healthcare"
-            st.session_state['cfg_product_type'] = "SaaS Platform"
-            st.session_state['cfg_audience'] = "B2B"
+            st.session_state['cfg_industry'] = "Auto Detect"
+            st.session_state['cfg_product_type'] = "Auto Detect"
+            st.session_state['cfg_audience'] = "Auto Detect"
             st.session_state['cfg_deliverable'] = "Product Requirements Document (PRD)"
             st.session_state['cfg_detail_level'] = "Standard"
             st.session_state['cfg_risk'] = True
