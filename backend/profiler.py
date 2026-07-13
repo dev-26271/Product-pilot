@@ -72,7 +72,6 @@ class PerformanceProfiler:
             ("Product Manager", "Product Manager"),
             ("Validation", "Validation"),
             ("Repair Loop", "Repair Loop"),
-            ("Planning Agent", "Planning Agent"),
             ("Traceability Graph", "Traceability Graph"),
             ("User Stories", "User Stories"),
             ("Roadmap", "Roadmap"),

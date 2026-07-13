@@ -314,14 +314,13 @@ class PythonLocalStrategy(OrchestrationStrategy):
             logger.error(f"Failed to build initial entity graph: {e}")
         profiler.end("Traceability Graph")
   
-        # 6. Step 5: Planning Agent execution
-        planning_agent = registry.get("planning_agent")
-        profiler.start("Planning Agent")
+        # 6. Step 5: Planning Analysis calculation (deterministic)
         try:
-            context = planning_agent.execute(context)
+            from backend.agents.entity_schema import calculate_planning_analysis
+            context.metadata["planning_analysis"] = calculate_planning_analysis(context)
+            logger.info("Deterministic planning analysis computed successfully.")
         except Exception as e:
-            logger.error(f"Planning Agent execution failed during orchestration: {e}")
-        profiler.end("Planning Agent")
+            logger.error(f"Failed to calculate deterministic planning analysis: {e}")
             
         total_duration = time.perf_counter() - start_time
         logger.info(f"Initial Multi-Agent PRD pipeline completed in {total_duration:.4f} seconds.")

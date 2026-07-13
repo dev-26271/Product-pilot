@@ -1,4 +1,4 @@
-﻿"""
+"""
 entity_schema.py -- Canonical Entity Envelope for ProductPilot v2
 
 Every generated object (Business Goal, Persona, Feature, FR, User Story,
@@ -136,3 +136,143 @@ def validate_domain_fields(
         for f in required_fields
         if f not in entity or entity[f] in (None, "", [], {})
     ]
+
+
+def calculate_planning_analysis(context: Any) -> Dict[str, Any]:
+    """Calculates workspace dashboard planning metrics and recommendations deterministically in Python."""
+    # 1. Maturity Scores
+    idea_val = 1.0
+    
+    ba = context.business_analysis or {}
+    has_goals = len(ba.get("business_goals", [])) > 0
+    has_personas = len(ba.get("user_personas", [])) > 0
+    if has_goals and has_personas:
+        business_val = 1.0
+    elif has_goals or has_personas:
+        business_val = 0.6
+    else:
+        business_val = 0.0
+        
+    prd = context.prd or {}
+    has_features = len(prd.get("features", [])) > 0 or len(prd.get("core_features", [])) > 0
+    has_reqs = len(prd.get("functional_requirements", [])) > 0 or len(prd.get("requirements", [])) > 0
+    if has_features and has_reqs:
+        requirements_val = 1.0
+    elif has_features or has_reqs:
+        requirements_val = 0.6
+    else:
+        requirements_val = 0.0
+        
+    has_roadmap = "Product Roadmap" in context.deliverables
+    has_srs = "Software Requirements Specification (SRS)" in context.deliverables
+    if has_roadmap and has_srs:
+        architecture_val = 1.0
+    elif has_roadmap or has_srs:
+        architecture_val = 0.6
+    else:
+        architecture_val = 0.0
+        
+    has_stories = "User Stories" in context.deliverables
+    has_jira = "Jira Tasks" in context.deliverables
+    if has_stories and has_jira:
+        testing_val = 1.0
+    elif has_stories or has_jira:
+        testing_val = 0.6
+    else:
+        testing_val = 0.0
+
+    validation_report = context.metadata.get("validation_report", {})
+    val_score = validation_report.get("score", 1.0)
+    
+    business_val = round(business_val * val_score, 2)
+    requirements_val = round(requirements_val * val_score, 2)
+    
+    maturity_scores = {
+        "idea": idea_val,
+        "business": business_val,
+        "requirements": requirements_val,
+        "architecture": architecture_val,
+        "testing": testing_val
+    }
+
+    # 2. Recommended Actions
+    recommended_actions = []
+    if not context.business_analysis:
+        recommended_actions.extend([
+            "Define target audience & business goals",
+            "Generate user personas"
+        ])
+    if not context.prd:
+        recommended_actions.append("Generate Product Requirements Document (PRD)")
+    if "User Stories" not in context.deliverables:
+        recommended_actions.append("Generate detailed User Stories and Acceptance Criteria")
+    if "Product Roadmap" not in context.deliverables:
+        recommended_actions.append("Create strategic Product Roadmap phases")
+    if "Jira Tasks" not in context.deliverables:
+        recommended_actions.append("Generate developer Jira Tasks with story points")
+    if "Sprint Backlog" not in context.deliverables:
+        recommended_actions.append("Construct Sprint Backlog and backlog allocation")
+        
+    errors = validation_report.get("errors", [])
+    warnings = validation_report.get("warnings", [])
+    if errors or warnings:
+        recommended_actions.append("Resolve open validation audits & traceability gaps")
+        
+    if not recommended_actions:
+        recommended_actions = [
+            "Conduct requirements feedback session with key stakeholders",
+            "Perform sprint planning dry run and backlog refinement",
+            "Run automated QA test generation"
+        ]
+
+    # 3. Smart Recommendations
+    smart_recommendations = []
+    for warn in warnings[:4]:
+        text = str(warn)
+        rec_type = "Requirements Gap"
+        if "traceability" in text.lower():
+            rec_type = "Traceability Gap"
+        elif "missing" in text.lower():
+            rec_type = "Missing Attribute"
+        elif "fibonacci" in text.lower() or "points" in text.lower():
+            rec_type = "Estimation Warning"
+        smart_recommendations.append({
+            "type": rec_type,
+            "description": text
+        })
+        
+    if len(smart_recommendations) < 3:
+        if not context.business_analysis:
+            smart_recommendations.append({
+                "type": "Target KPI Alignment",
+                "description": "Establish baseline and target values for the MVP time-bound goals."
+            })
+        if not context.prd:
+            smart_recommendations.append({
+                "type": "Success Criteria",
+                "description": "Map product features back to quantitative user performance goals."
+            })
+        if "User Stories" not in context.deliverables:
+            smart_recommendations.append({
+                "type": "Acceptance Criteria",
+                "description": "Ensure Definition of Done (DoD) is clearly defined for all prospective epics."
+            })
+        if "Product Roadmap" not in context.deliverables:
+            smart_recommendations.append({
+                "type": "Phase Dependency",
+                "description": "Determine critical path and external dependencies between release milestones."
+            })
+        smart_recommendations.append({
+            "type": "Metric Refinement",
+            "description": "Define engineering indicators to track actual features utilization post-launch."
+        })
+        smart_recommendations.append({
+            "type": "Traceability",
+            "description": "Map all functional requirements back to target business goals to prevent scope creep."
+        })
+        
+    return {
+        "maturity_scores": maturity_scores,
+        "recommended_actions": recommended_actions[:5],
+        "smart_recommendations": smart_recommendations[:4]
+    }

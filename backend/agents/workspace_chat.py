@@ -345,6 +345,14 @@ def apply_workspace_refinements(
     except Exception as e:
         logger.error(f"Validation Agent verification failed: {e}")
 
+    # Refresh planning analysis deterministically after refinements and validation
+    try:
+        from backend.agents.entity_schema import calculate_planning_analysis
+        context.metadata["planning_analysis"] = calculate_planning_analysis(context)
+        logger.info("Dynamic planning analysis refreshed successfully after refinement.")
+    except Exception as e:
+        logger.error(f"Failed to refresh dynamic planning analysis: {e}")
+
     # Clear pending refinements
     context.metadata.pop("pending_changes", None)
     context.metadata.pop("pending_impact", None)
