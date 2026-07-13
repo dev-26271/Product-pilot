@@ -28,7 +28,7 @@ class BusinessAnalystAgent(BaseAgent):
         retrieval_query = f"{problem} {' '.join(features_list)}".strip() or context.idea
         logger.info(f"Retrieving business KB context for query: '{retrieval_query[:50]}...'")
         
-        context_docs = retrieve_business(retrieval_query, k=3)
+        context_docs = retrieve_business(retrieval_query, k=2)
         context_str = "\n\n".join([doc.page_content for doc in context_docs])
         logger.info(f"Retrieved {len(context_docs)} chunks from business index.")
         

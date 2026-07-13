@@ -32,7 +32,7 @@ class ProductManagerAgent(BaseAgent):
         retrieval_query = f"{problem} {features}".strip() or context.idea
         
         logger.info(f"Retrieving product KB context for query: '{retrieval_query[:50]}...'")
-        context_docs = retrieve_product(retrieval_query, k=3)
+        context_docs = retrieve_product(retrieval_query, k=2)
         context_str = "\n\n".join([doc.page_content for doc in context_docs])
         logger.info(f"Retrieved {len(context_docs)} chunks from product index.")
         
@@ -136,25 +136,151 @@ Return only the complete updated JSON.
         }
         
         # Assemble standard emoji-keyed PRD structure exactly as orchestrator/UI expects
+        
+        # 1. Expanded User Personas Formatting
+        personas_list = pm_json.get("User_Personas") or ba.get("User Personas", [])
+        personas_formatted = []
+        for p in personas_list:
+            if isinstance(p, dict):
+                pname = p.get("name") or p.get("role") or "User Persona"
+                prole = p.get("role") or "Persona Role"
+                goals = p.get("goals") or [p.get("needs", "")]
+                goals_str = ", ".join(goals) if isinstance(goals, list) else str(goals)
+                pain_points = p.get("pain_points") or []
+                pain_str = ", ".join(pain_points) if isinstance(pain_points, list) else str(pain_points)
+                
+                personas_formatted.append(
+                    f"**{pname} ({prole})**\n"
+                    f"- *Goals:* {goals_str}\n"
+                    f"- *Pain Points:* {pain_str or 'Unknown'}\n"
+                    f"- *Motivations:* {p.get('motivations', 'Unknown')}\n"
+                    f"- *Technical Proficiency:* {p.get('technical_proficiency', 'Medium')}\n"
+                    f"- *Daily Workflow:* {p.get('daily_workflow', 'Unknown')}"
+                )
+            else:
+                personas_formatted.append(str(p))
+        personas_md = "\n\n".join(personas_formatted)
+
+        # 2. Detailed Functional Requirements Formatting
+        func_reqs_formatted = []
+        for r in pm_json.get("Functional_Requirements", []):
+            rid = r.get("id", "FR-XXX")
+            rtitle = r.get("title") or r.get("name") or "Requirement"
+            rdesc = r.get("description", "")
+            rpriority = r.get("priority", "Medium")
+            rac = r.get("acceptance_criteria", "")
+            rpersona = r.get("related_persona", "All")
+            rgoal = r.get("related_business_goal", "Unknown")
+            rmetric = r.get("success_metric", "Unknown")
+            rdeps = r.get("dependencies") or []
+            rdeps_str = ", ".join(rdeps) if isinstance(rdeps, list) else str(rdeps)
+            rrisks = r.get("risks", "Low")
+            
+            func_reqs_formatted.append(
+                f"**{rid} — {rtitle}** (Priority: {rpriority})\n"
+                f"{rdesc}\n"
+                f"- *Acceptance Criteria:* {rac}\n"
+                f"- *Related Persona:* {rpersona}\n"
+                f"- *Related Business Goal:* {rgoal}\n"
+                f"- *Success Metric:* {rmetric}\n"
+                f"- *Dependencies:* {rdeps_str or 'None'}\n"
+                f"- *Risks:* {rrisks}"
+            )
+        func_reqs_md = "\n\n".join(func_reqs_formatted)
+
+        # 3. Detailed Core Features Formatting
+        features_formatted = []
+        for f in pm_json.get("Core_Features", []):
+            fid = f.get("id", "FR-XXX")
+            fname = f.get("name", "Feature")
+            fdesc = f.get("description", "")
+            fpriority = f.get("priority", "Medium")
+            fgoal = f.get("business_goal_mapping", "Unknown")
+            fpersona = f.get("user_persona_mapping", "Unknown")
+            fmetric = f.get("success_metric", "Unknown")
+            fac = f.get("acceptance_criteria", "")
+            fdeps = f.get("dependencies") or []
+            fdeps_str = ", ".join(fdeps) if isinstance(fdeps, list) else str(fdeps)
+            frisks = f.get("risks", "Low")
+            
+            features_formatted.append(
+                f"**{fid} — {fname}** (Priority: {fpriority})\n"
+                f"{fdesc}\n"
+                f"- *Business Goal Mapping:* {fgoal}\n"
+                f"- *User Persona Mapping:* {fpersona}\n"
+                f"- *Success Metric:* {fmetric}\n"
+                f"- *Acceptance Criteria:* {fac}\n"
+                f"- *Dependencies:* {fdeps_str or 'None'}\n"
+                f"- *Risks:* {frisks}"
+            )
+        features_md = "\n\n".join(features_formatted)
+
+        # 4. Detailed High-Level Roadmap Formatting
+        roadmap_formatted = []
+        for r in pm_json.get("High_Level_Roadmap", []):
+            phase = r.get("phase", "Phase")
+            objs = r.get("objectives", "Unknown")
+            delivs = r.get("deliverables") or []
+            delivs_str = ", ".join(delivs) if isinstance(delivs, list) else str(delivs)
+            miles = r.get("milestones") or []
+            miles_str = ", ".join(miles) if isinstance(miles, list) else str(miles)
+            rdeps = r.get("dependencies") or []
+            rdeps_str = ", ".join(rdeps) if isinstance(rdeps, list) else str(rdeps)
+            metrics = r.get("success_metrics") or []
+            metrics_str = ", ".join(metrics) if isinstance(metrics, list) else str(metrics)
+            exit_crit = r.get("exit_criteria", "Unknown")
+            
+            roadmap_formatted.append(
+                f"📅 **{phase}**\n"
+                f"- *Objectives:* {objs}\n"
+                f"- *Deliverables:* {delivs_str}\n"
+                f"- *Milestones:* {miles_str}\n"
+                f"- *Dependencies:* {rdeps_str or 'None'}\n"
+                f"- *Success Metrics:* {metrics_str}\n"
+                f"- *Exit Criteria:* {exit_crit}"
+            )
+        roadmap_md = "\n\n".join(roadmap_formatted)
+
+        # Safe formatting for summary, vision, and problem fields if LLM returned dictionaries or lists
+        exec_summary = pm_json.get("Executive_Summary", "")
+        if isinstance(exec_summary, dict):
+            exec_summary = "\n".join([f"**{k}:** {v}" for k, v in exec_summary.items()])
+        elif isinstance(exec_summary, list):
+            exec_summary = "\n".join([f"- {item}" for item in exec_summary])
+            
+        product_vision = pm_json.get("Product_Vision", "")
+        if isinstance(product_vision, dict):
+            product_vision = "\n".join([f"**{k}:** {v}" for k, v in product_vision.items()])
+        elif isinstance(product_vision, list):
+            product_vision = "\n".join([f"- {item}" for item in product_vision])
+
+        problem_statement = pm_json.get("Problem_Statement") or exec_summary
+        if isinstance(problem_statement, dict):
+            problem_statement = "\n".join([f"**{k}:** {v}" for k, v in problem_statement.items()])
+        elif isinstance(problem_statement, list):
+            problem_statement = "\n".join([f"- {item}" for item in problem_statement])
+
         prd_content = {
-            "📋 Executive Summary":        pm_json.get("Executive_Summary", ""),
-            "🔭 Product Vision":            pm_json.get("Product_Vision", ""),
-            "🎯 Problem Statement":         pm_json.get("Problem_Statement") or pm_json.get("Executive_Summary", ""),
-            "👥 User Personas":             "\n\n".join([f"**{p.get('name')} ({p.get('role')})**\n{p.get('needs')}" for p in ba.get("User Personas", [])]),
-            "📈 Goals & Objectives":        "\n".join([f"- {g}" for g in pm_json.get("Goals_and_Objectives", [])]),
-            "⚙️ Functional Requirements":  "\n\n".join([f"**{r.get('id', '')} — {r.get('title', '')}** (Priority: {r.get('priority', '')})\n{r.get('description', '')}\n*Acceptance Criteria:* {r.get('acceptance_criteria', '')}" for r in pm_json.get("Functional_Requirements", [])]),
-            "🔒 Non-Functional Requirements": "\n".join([f"**{k}:** {v}" for k, v in pm_json.get("Non_Functional_Requirements", {}).items()]) if isinstance(pm_json.get("Non_Functional_Requirements"), dict) else "",
-            "✨ Core Features":             "\n\n".join([f"**{f.get('name', '')} (Priority: {f.get('priority', '')})**\n{f.get('description', '')}\n*Business Value:* {f.get('business_value', '')}" for f in pm_json.get("Core_Features", [])]),
-            "💡 Assumptions":               "\n".join([f"- {a}" for a in pm_json.get("Assumptions", [])]),
-            "🚧 Constraints":               "\n".join([f"- {c}" for c in pm_json.get("Constraints", [])]),
-            "📊 Success Metrics":           "\n".join([f"- {m}" for m in pm_json.get("Success_Metrics", [])]),
-            "❓ Open Questions":            "\n".join([f"- {q}" for q in pm_json.get("Open_Questions", [])])
+            "📋 Executive Summary":        exec_summary,
+            "🔭 Product Vision":            product_vision,
+            "🎯 Problem Statement":         problem_statement,
+            "👥 User Personas":             personas_md,
+            "📈 Goals & Objectives":        "\n".join([f"- {g}" for g in pm_json.get("Goals_and_Objectives", [])]) if isinstance(pm_json.get("Goals_and_Objectives"), list) else str(pm_json.get("Goals_and_Objectives", "")),
+            "⚙️ Functional Requirements":  func_reqs_md,
+            "🔒 Non-Functional Requirements": "\n".join([f"**{k}:** {v}" for k, v in pm_json.get("Non_Functional_Requirements", {}).items()]) if isinstance(pm_json.get("Non_Functional_Requirements"), dict) else str(pm_json.get("Non_Functional_Requirements", "")),
+            "✨ Core Features":             features_md,
+            "💡 Assumptions":               "\n".join([f"- {a}" for a in pm_json.get("Assumptions", [])]) if isinstance(pm_json.get("Assumptions"), list) else str(pm_json.get("Assumptions", "")),
+            "🚧 Constraints":               "\n".join([f"- {c}" for c in pm_json.get("Constraints", [])]) if isinstance(pm_json.get("Constraints"), list) else str(pm_json.get("Constraints", "")),
+            "📊 Success Metrics":           "\n".join([f"- {m}" for m in pm_json.get("Success_Metrics", [])]) if isinstance(pm_json.get("Success_Metrics"), list) else str(pm_json.get("Success_Metrics", "")),
+            "📅 High-Level Roadmap":         roadmap_md,
+            "❓ Open Questions":            "\n".join([f"- {q}" for q in pm_json.get("Open_Questions", [])]) if isinstance(pm_json.get("Open_Questions"), list) else str(pm_json.get("Open_Questions", ""))
         }
         
         if context.metadata.get("risk_analysis", True):
             prd_content["⚠️ Risk Factors"] = "Initial synchronization intervals and compatibility vectors during client updates."
             
-        prd_content = {k: v for k, v in prd_content.items() if v and v.strip()}
+        # Safe string conversions and strip check to prevent 'dict has no attribute strip'
+        prd_content = {k: str(v) for k, v in prd_content.items() if v and (str(v).strip() if isinstance(v, str) else True)}
         
         return context.clone(
             prd=pm_json,  # Keep clean JSON inside context
