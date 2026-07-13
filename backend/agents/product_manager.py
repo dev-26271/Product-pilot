@@ -1,13 +1,17 @@
 import json
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from backend.agent_registry import BaseAgent, registry
 from backend.workspace_context import WorkspaceContext
 from backend.llm import get_llm
 from backend.prompts import PRODUCT_MANAGER_SYSTEM_PROMPT
+from backend.agents.entity_schema import (
+    validate_entity_envelope, validate_domain_fields,
+    FEATURE_REQUIRED, FUNCTIONAL_REQUIREMENT_REQUIRED
+)
 from rag import retrieve_product
 
 logger = logging.getLogger(__name__)
@@ -45,6 +49,8 @@ Intent Context (Canonical Source of Truth):
 
 Business Analysis:
 {json.dumps(ba, indent=2)}
+
+Current UTC timestamp: {datetime.now(timezone.utc).isoformat()}
 """
         
         if repair_feedback:
@@ -123,45 +129,60 @@ Return only the complete updated JSON.
                 pm_json[key] = [] if key != "Executive_Summary" else "Unknown"
                 
         duration_ms = int((time.perf_counter() - start_time) * 1000)
-        
-        # Log entry
+
         log_entry = {
             "agent": "ProductManagerAgent",
             "model": model_name,
             "latency_ms": duration_ms,
             "tokens": len(raw_text) // 4 if 'raw_text' in locals() else 0,
             "confidence": 0.90,
-            "timestamp": datetime.now().isoformat(),
-            "version": "2.0.0"
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "version": "3.0.0",
         }
         
-        # Assemble standard emoji-keyed PRD structure exactly as orchestrator/UI expects
-        
-        # 1. Expanded User Personas Formatting
-        personas_list = pm_json.get("User_Personas") or ba.get("User Personas", [])
+        # --- Validate canonical entities ---
+        _log_entity_warnings(pm_json)
+
+        # 1. Executive Summary — handle both new dict format and legacy string
+        exec_summary_raw = pm_json.get("Executive_Summary", "")
+        if isinstance(exec_summary_raw, dict):
+            es = exec_summary_raw
+            exec_summary = (
+                f"**Problem:** {es.get('problem', '')}\n\n"
+                f"**Opportunity:** {es.get('opportunity', '')}\n\n"
+                f"**Market:** {es.get('market', '')}\n\n"
+                f"**Strategy:** {es.get('strategy', '')}\n\n"
+                f"**KPIs:** {', '.join(es.get('kpis', []))}\n\n"
+                f"**Timeline:** {es.get('timeline', '')}\n\n"
+                f"**Risks:** {', '.join(es.get('risks', []) if isinstance(es.get('risks'), list) else [str(es.get('risks',''))])}\n\n"
+                f"**Investment Summary:** {es.get('investment_summary', '')}"
+            )
+        elif isinstance(exec_summary_raw, list):
+            exec_summary = "\n".join(f"- {item}" for item in exec_summary_raw)
+        else:
+            exec_summary = str(exec_summary_raw)
+        # 2. User Personas — handle new canonical entity format
+        personas_list = pm_json.get("User_Personas") or ba.get("user_personas") or ba.get("User Personas", [])
         personas_formatted = []
         for p in personas_list:
-            if isinstance(p, dict):
-                pname = p.get("name") or p.get("role") or "User Persona"
-                prole = p.get("role") or "Persona Role"
-                goals = p.get("goals") or [p.get("needs", "")]
-                goals_str = ", ".join(goals) if isinstance(goals, list) else str(goals)
-                pain_points = p.get("pain_points") or []
-                pain_str = ", ".join(pain_points) if isinstance(pain_points, list) else str(pain_points)
-                
-                personas_formatted.append(
-                    f"**{pname} ({prole})**\n"
-                    f"- *Goals:* {goals_str}\n"
-                    f"- *Pain Points:* {pain_str or 'Unknown'}\n"
-                    f"- *Motivations:* {p.get('motivations', 'Unknown')}\n"
-                    f"- *Technical Proficiency:* {p.get('technical_proficiency', 'Medium')}\n"
-                    f"- *Daily Workflow:* {p.get('daily_workflow', 'Unknown')}"
-                )
-            else:
+            if not isinstance(p, dict):
                 personas_formatted.append(str(p))
+                continue
+            pname = p.get("name") or p.get("role") or "User Persona"
+            prole = p.get("role") or "Persona Role"
+            goals = p.get("goals") or [p.get("needs", "")]
+            goals_str = ", ".join(goals) if isinstance(goals, list) else str(goals)
+            pain = p.get("pain_points") or p.get("frustrations") or []
+            pain_str = ", ".join(pain) if isinstance(pain, list) else str(pain)
+            personas_formatted.append(
+                f"**{pname}** ({p.get('id','')}) — {prole}\n"
+                f"- *Goals:* {goals_str}\n"
+                f"- *Frustrations:* {pain_str or 'Not specified'}\n"
+                f"- *Motivations:* {p.get('motivations', 'Not specified')}\n"
+                f"- *Technical Proficiency:* {p.get('technical_proficiency', 'Medium')}\n"
+                f"- *Daily Workflow:* {p.get('daily_workflow') or p.get('workflow', 'Not specified')}"
+            )
         personas_md = "\n\n".join(personas_formatted)
-
-        # 2. Detailed Functional Requirements Formatting
         func_reqs_formatted = []
         for r in pm_json.get("Functional_Requirements", []):
             rid = r.get("id", "FR-XXX")
@@ -215,7 +236,7 @@ Return only the complete updated JSON.
             )
         features_md = "\n\n".join(features_formatted)
 
-        # 4. Detailed High-Level Roadmap Formatting
+        # 5. High-Level Roadmap Formatting
         roadmap_formatted = []
         for r in pm_json.get("High_Level_Roadmap", []):
             phase = r.get("phase", "Phase")
@@ -254,7 +275,7 @@ Return only the complete updated JSON.
         elif isinstance(product_vision, list):
             product_vision = "\n".join([f"- {item}" for item in product_vision])
 
-        problem_statement = pm_json.get("Problem_Statement") or exec_summary
+        problem_statement = pm_json.get("Problem_Statement") or str(exec_summary_raw)
         if isinstance(problem_statement, dict):
             problem_statement = "\n".join([f"**{k}:** {v}" for k, v in problem_statement.items()])
         elif isinstance(problem_statement, list):
@@ -277,20 +298,46 @@ Return only the complete updated JSON.
         }
         
         if context.metadata.get("risk_analysis", True):
-            prd_content["⚠️ Risk Factors"] = "Initial synchronization intervals and compatibility vectors during client updates."
-            
-        # Safe string conversions and strip check to prevent 'dict has no attribute strip'
+            prd_content["\u26a0\ufe0f Risk Factors"] = "See Risk Factors in the Executive Summary and individual Functional Requirements above."
+
         prd_content = {k: str(v) for k, v in prd_content.items() if v and (str(v).strip() if isinstance(v, str) else True)}
-        
+
         return context.clone(
-            prd=pm_json,  # Keep clean JSON inside context
+            prd=pm_json,
             deliverables={
-                "Product Requirements Document (PRD)": {"content": prd_content}
+                "Product Requirements Document (PRD)": {
+                    "content": prd_content,
+                    "entities": {
+                        "features": pm_json.get("Core_Features", []),
+                        "functional_requirements": pm_json.get("Functional_Requirements", []),
+                        "personas": pm_json.get("User_Personas", []),
+                    },
+                }
             }
         ).add_agent_log(log_entry)
 
 # Auto-register agent
 registry.register("product_manager", ProductManagerAgent())
+
+
+def _log_entity_warnings(pm_json: dict) -> None:
+    """Emit warnings for any canonical entity violations in PM output."""
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    all_warnings = []
+    for feat in pm_json.get("Core_Features", []):
+        fid = feat.get("id", "FT-?")
+        all_warnings.extend(validate_entity_envelope(feat, fid))
+        all_warnings.extend(validate_domain_fields(feat, FEATURE_REQUIRED, fid))
+    for fr in pm_json.get("Functional_Requirements", []):
+        frid = fr.get("id", "FR-?")
+        all_warnings.extend(validate_entity_envelope(fr, frid))
+        all_warnings.extend(validate_domain_fields(fr, FUNCTIONAL_REQUIREMENT_REQUIRED, frid))
+    if all_warnings:
+        _logger.warning(
+            f"ProductManagerAgent: {len(all_warnings)} entity warnings:\n"
+            + "\n".join(f"  ⚠ {w}" for w in all_warnings)
+        )
 
 
 # ── Backwards Compatible Public Wrapper ───────────────────────────────────────

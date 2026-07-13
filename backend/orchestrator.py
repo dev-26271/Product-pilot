@@ -265,6 +265,16 @@ class PythonLocalStrategy(OrchestrationStrategy):
                 else:
                     logger.warning("Max PM self-repair loop attempts reached. Proceeding with current PRD.")
         
+        # Build and update entity_graph in context metadata
+        from backend.agents.traceability_engine import TraceabilityEngine
+        try:
+            engine = TraceabilityEngine(context.to_dict())
+            context.metadata["entity_graph"] = engine.metadata.get("entity_graph", {})
+            context.metadata["id_mappings"] = engine.metadata.get("id_mappings", {})
+            logger.info("TraceabilityEngine successfully built entity graph for workspace context.")
+        except Exception as e:
+            logger.error(f"Failed to build initial entity graph: {e}")
+
         # 6. Step 5: Planning Agent execution
         planning_agent = registry.get("planning_agent")
         try:
@@ -283,6 +293,7 @@ class PythonLocalStrategy(OrchestrationStrategy):
             snapshot_ctx = context.clone()
             snapshot_ctx.metadata.pop("pending_changes", None)
             snapshot_ctx.metadata.pop("pending_approval", None)
+            snapshot_ctx.metadata.pop("pending_impact", None)
             snapshot_dict = snapshot_ctx.to_dict()
             
             context.metadata["version_history"] = [

@@ -27,10 +27,22 @@ class TraceabilityEngine:
         }
         self.build_graph()
 
-    def get_or_create_id(self, category: str, text: str, prefix: str) -> str:
+    def get_or_create_id(self, category: str, text: Any, prefix: str) -> str:
         """Returns the persistent mapped ID for a text string, or allocates a new sequential ID."""
         if not text:
             return ""
+        if isinstance(text, dict):
+            text = (
+                text.get("text")
+                or text.get("goal")
+                or text.get("description")
+                or text.get("name")
+                or text.get("summary")
+                or str(text)
+            )
+        elif not isinstance(text, str):
+            text = str(text)
+            
         # Clean text to use as map key
         key = text.strip().lower()
         if key in self.id_mappings[category]:
@@ -56,26 +68,31 @@ class TraceabilityEngine:
                 
         ps_id = ""
         if prob_stmt:
-            ps_id = self.get_or_create_id("problem", prob_stmt, "PS")
+            ps_text = prob_stmt.get("text") or prob_stmt.get("description") or str(prob_stmt) if isinstance(prob_stmt, dict) else str(prob_stmt)
+            ps_id = self.get_or_create_id("problem", ps_text, "PS")
             self.graph["nodes"][ps_id] = {
                 "type": "Problem Statement",
-                "label": prob_stmt[:60] + "...",
-                "details": {"description": prob_stmt}
+                "label": ps_text[:60] + "...",
+                "details": prob_stmt if isinstance(prob_stmt, dict) else {"description": prob_stmt}
             }
 
         # 2. Business Goals (BG-xxx)
         goals = []
         if isinstance(ba, dict):
-            goals = ba.get("goals", [])
+            goals = ba.get("business_goals") or ba.get("goals") or []
             
         bg_ids = []
         for g in goals:
-            bg_id = self.get_or_create_id("goals", g, "BG")
+            g_text = g.get("goal") or g.get("description") or str(g) if isinstance(g, dict) else str(g)
+            bg_id = self.get_or_create_id("goals", g_text, "BG")
             bg_ids.append(bg_id)
+            details = g if isinstance(g, dict) else {"description": g}
+            if "description" not in details:
+                details["description"] = g_text
             self.graph["nodes"][bg_id] = {
                 "type": "Business Goal",
-                "label": g[:60] + "...",
-                "details": {"description": g}
+                "label": g_text[:60] + "...",
+                "details": details
             }
             if ps_id:
                 self.graph["edges"].append({"source": ps_id, "target": bg_id, "relation": "addresses"})
@@ -134,7 +151,10 @@ class TraceabilityEngine:
             bg_target = r.get("business_goal") or r.get("Related Business Goal")
             if bg_target:
                 for bg_id in bg_ids:
-                    if bg_id in bg_target or self.graph["nodes"][bg_id]["details"]["description"][:10].lower() in bg_target.lower():
+                    bg_desc = self.graph["nodes"][bg_id]["details"].get("description") or ""
+                    if not isinstance(bg_desc, str):
+                        bg_desc = str(bg_desc)
+                    if bg_id in bg_target or (bg_desc and bg_desc[:10].lower() in bg_target.lower()):
                         self.graph["edges"].append({"source": bg_id, "target": fr_id, "relation": "implements"})
                         
             # Map acceptance criteria (AC-xxx)
@@ -238,6 +258,14 @@ class TraceabilityEngine:
             us_ref = task.get("user_story_id")
             if us_ref in us_ids:
                 self.graph["edges"].append({"source": jt_id, "target": us_ids[us_ref], "relation": "resolves"})
+
+        # Build and store entity_graph inside metadata for dependency tracking
+        entity_graph = {}
+        for edge in self.graph["edges"]:
+            src = edge["source"]
+            tgt = edge["target"]
+            entity_graph.setdefault(src, []).append(tgt)
+        self.metadata["entity_graph"] = entity_graph
 
     def get_dependencies(self, node_id: str) -> Dict[str, List[str]]:
         """Traverses the directed graph and returns forward/reverse dependencies of the node."""

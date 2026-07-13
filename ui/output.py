@@ -203,9 +203,9 @@ def render_user_stories(doc_data: Dict[str, Any]) -> None:
                 sid      = story.get("id", "?")
                 stitle   = story.get("title", "Untitled Story")
                 feature  = story.get("feature", "")
-                persona  = story.get("persona", "")
-                action   = story.get("action", "")
-                value    = story.get("value", "")
+                persona  = story.get("as_a") or story.get("persona", "")
+                action   = story.get("i_want") or story.get("action", "")
+                value    = story.get("so_that") or story.get("value", "")
                 priority = story.get("priority", "Medium")
                 status   = story.get("status", "To Do")
                 risk     = story.get("risk", "Low")
@@ -276,6 +276,18 @@ def render_user_stories(doc_data: Dict[str, Any]) -> None:
                     )
                     for ci, criterion in enumerate(ac_list):
                         st.checkbox(criterion, value=False, key=f"ac_{sid}_{ci}", disabled=True)
+                    st.markdown("<div style='height:0.5rem;'/>", unsafe_allow_html=True)
+
+                # Definition of Done — read-only checkboxes
+                dod_list = story.get("definition_of_done", [])
+                if dod_list:
+                    st.markdown(
+                        "<div style='font-size:0.82rem; font-weight:600; color:#9CA3AF; "
+                        "margin-bottom:0.3rem; padding-left:0.25rem;'>📋 Definition of Done</div>",
+                        unsafe_allow_html=True
+                    )
+                    for di, criterion in enumerate(dod_list):
+                        st.checkbox(criterion, value=False, key=f"dod_{sid}_{di}", disabled=True)
                     st.markdown("<div style='height:0.5rem;'/>", unsafe_allow_html=True)
 
                 # Dependencies — amber chips
@@ -362,10 +374,17 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
 
                 # ── User Stories: structured JSON → dedicated board renderer ──────
                 if tab_name == "User Stories":
-                    # Agent stores the raw structured JSON at the top level.
-                    # Support both flat {"epics":…,"stories":…} and wrapped {"content":…}
                     us_data = doc_data.get("content", doc_data)
                     render_user_stories(us_data)
+
+                elif tab_name == "PRD" and (doc_data.get("entities") or project.get("prd")):
+                    render_prd_entities(project.get("prd") or doc_data.get("entities"))
+
+                elif tab_name == "Roadmap" and doc_data.get("entities", {}).get("phases"):
+                    render_roadmap_entities(doc_data["entities"]["phases"])
+
+                elif tab_name == "Jira Tasks" and doc_data.get("entities", {}).get("tasks"):
+                    render_jira_entities(doc_data["entities"]["tasks"])
 
                 else:
                     # ── All other documents: generic section-by-section renderer ──
@@ -461,8 +480,8 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
     import streamlit as st
     
     st.markdown("<hr style='border-top: 1px solid #2A2A2A; margin: 3rem 0;'>", unsafe_allow_html=True)
-    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>💬 Chat & Refinement Strategy</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.5rem;'>Ask questions about the deliverables or suggest edits (e.g., 'Add subscription billing', 'Target enterprise customers'). The PM Agent will detect dependencies and propose document updates.</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>💬 Ask ProductPilot</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.5rem;'>Collaborate with a Senior Product Manager to understand, critique, explain, and incrementally modify your workspace deliverables. Ask questions, analyze tradeoffs, or request changes.</p>", unsafe_allow_html=True)
 
     # 1. Initialize metadata lists if not present
     if "metadata" not in project:
@@ -482,6 +501,7 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
     chat_history = project["metadata"]["chat_history"]
     pending_changes = project["metadata"].get("pending_changes")
     pending_approval = project["metadata"].get("pending_approval")
+    pending_impact = project["metadata"].get("pending_impact")
 
     # 2. Display Chat Messages
     chat_container = st.container()
@@ -494,7 +514,108 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
 
     # 3. Render Pending Changes or Pending Approvals Summary if detected
     
-    if pending_approval:
+    if pending_impact:
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+        
+        severity = pending_impact.get("severity", "Medium")
+        severity_color = "#FF3B3B" if severity == "High" else "#FF8C00" if severity == "Medium" else "#22C55E"
+        
+        st.markdown(f"""
+            <div style='background-color: #111827; border: 1px solid #2D2D2D; border-left: 4px solid {severity_color}; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;'>
+                <h4 style='color: #F5F5F5; margin: 0 0 0.5rem 0; font-weight: 700; display:flex; justify-content:space-between; align-items:center;'>
+                    <span>🔍 Workspace Change Impact Analysis</span>
+                    <span style='color: {severity_color}; background-color: {severity_color}22; font-size: 0.8rem; padding: 2px 10px; border-radius: 12px; border: 1px solid {severity_color}44; font-weight:600;'>{severity} Severity</span>
+                </h4>
+                <p style='color: #E5E7EB; font-size: 0.9rem; margin-bottom: 0.75rem; margin-top: 0.5rem;'><strong>Proposed Change:</strong> "{pending_impact['instruction']}"</p>
+                <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 0.8rem; font-size: 0.82rem; color: #9CA3AF;'>
+                    <div><strong>AI Cost Estimate:</strong> ${pending_impact['estimated_regeneration_cost']['usd_cost']:.4f} ({pending_impact['estimated_regeneration_cost']['tokens']} tokens)</div>
+                    <div><strong>Regeneration Time:</strong> {pending_impact['estimated_regeneration_time']}</div>
+                    <div><strong>PM Confidence:</strong> {int(pending_impact['confidence'] * 100)}%</div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        entities = pending_impact.get("affected_entities", [])
+        type_counts = {}
+        for ent in entities:
+            t = ent.get("type", "Entity")
+            type_counts[t] = type_counts.get(t, 0) + 1
+            
+        st.markdown("<p style='font-size: 0.9rem; color: #E5E7EB; font-weight: 600; margin-bottom: 0.5rem;'>This change affects:</p>", unsafe_allow_html=True)
+        
+        for t, count in type_counts.items():
+            st.markdown(f"✓ **{count} {t}s**")
+            
+        doc_list = pending_impact.get("affected_documents", [])
+        for doc in doc_list:
+            st.markdown(f"✓ **{doc}**")
+            
+        st.markdown("<p style='font-size: 0.82rem; color: #EF4444; font-weight: 600; margin-top: 0.5rem;'>⚠️ No changes have been applied yet.</p>", unsafe_allow_html=True)
+        
+        breaking = pending_impact.get("breaking_changes", [])
+        if breaking:
+            st.markdown("<p style='font-size: 0.88rem; color: #FF3B3B; font-weight: 700; margin-top: 1rem;'>⚠️ Breaking Changes Detected:</p>", unsafe_allow_html=True)
+            for b in breaking:
+                st.markdown(f"- <span style='color:#FF3B3B; font-size: 0.85rem;'>{b}</span>", unsafe_allow_html=True)
+                
+        warnings = pending_impact.get("warnings", [])
+        if warnings:
+            st.markdown("<p style='font-size: 0.88rem; color: #FF8C00; font-weight: 700; margin-top: 0.75rem;'>⚠️ Warnings:</p>", unsafe_allow_html=True)
+            for w in warnings:
+                st.markdown(f"- <span style='color:#FF8C00; font-size: 0.85rem;'>{w}</span>", unsafe_allow_html=True)
+                
+        recs = pending_impact.get("recommendations", [])
+        if recs:
+            st.markdown("<p style='font-size: 0.88rem; color: #4F8CFF; font-weight: 700; margin-top: 0.75rem;'>💡 Recommendations:</p>", unsafe_allow_html=True)
+            for r in recs:
+                st.markdown(f"- <span style='color:#4F8CFF; font-size: 0.85rem;'>{r}</span>", unsafe_allow_html=True)
+                
+        st.markdown("<div style='height: 1.2rem;'></div>", unsafe_allow_html=True)
+        
+        col_apply, col_review, col_cancel = st.columns([2.5, 2.5, 2])
+        active_id = st.session_state.get('active_project_id')
+        
+        with col_apply:
+            if st.button("Apply Automatically", type="primary", key="apply_impact_btn", use_container_width=True):
+                with st.spinner("Applying refinements across affected documents..."):
+                    try:
+                        from backend.agents.workspace_chat import apply_workspace_refinements
+                        updated_workspace = apply_workspace_refinements(
+                            workspace_dict=project,
+                            instruction=pending_impact["instruction"],
+                            affected_flags=pending_impact["affected"]
+                        )
+                        st.session_state['projects'][active_id] = updated_workspace
+                        st.success("Refinements applied successfully!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to apply refinements: {e}")
+                        
+        with col_review:
+            review_key = f"review_details_{active_id}"
+            if st.button("Review Affected Items", type="secondary", key="review_impact_btn", use_container_width=True):
+                st.session_state[review_key] = not st.session_state.get(review_key, False)
+                st.rerun()
+                
+        with col_cancel:
+            if st.button("Cancel", type="secondary", key="cancel_impact_btn", use_container_width=True):
+                project["metadata"].pop("pending_impact", None)
+                st.success("Refinement cancelled.")
+                time.sleep(0.5)
+                st.rerun()
+                
+        if st.session_state.get(f"review_details_{active_id}", False):
+            st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+            with st.expander("🔍 Affected Entities Detail", expanded=True):
+                if entities:
+                    for ent in entities:
+                        st.markdown(f"- **{ent['id']}** ({ent['type']}): {ent['name']}")
+                else:
+                    st.markdown("*No specific entities are downstream-impacted. The entire parent document will be incrementally refined.*")
+        st.markdown("<div style='height: 1.5rem;'></div>", unsafe_allow_html=True)
+
+    elif pending_approval:
         st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
         st.markdown(f"""
             <div style='background-color: #1A1A1A; border: 1px solid #FF4B4B; border-left: 4px solid #FF4B4B; padding: 1.2rem; border-radius: 6px; margin-bottom: 1.5rem;'>
@@ -585,20 +706,48 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
                 
         st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
 
-    # 4. Chat Input Box (Disabled if pending changes or approvals are awaiting confirmation)
+    # Render starter prompt grid when chat is fresh
+    if len(chat_history) <= 2 and not (pending_changes or pending_approval or pending_impact):
+        st.markdown("<p style='font-size: 0.85rem; color: #9CA3AF; margin-top: 1.5rem; margin-bottom: 0.5rem; font-weight: 500;'>💡 Starter Prompts:</p>", unsafe_allow_html=True)
+        
+        starters = [
+            ("📋 Summarize this project", "Summarize this project"),
+            ("🔍 Review this PRD", "Review this PRD"),
+            ("⚠️ Find missing requirements", "Find missing requirements"),
+            ("🗓️ Explain this roadmap", "Explain this roadmap"),
+            ("🎯 Suggest MVP scope", "Suggest MVP scope"),
+            ("🛡️ Analyze project risks", "Analyze project risks"),
+            ("💡 Recommend improvements", "Recommend improvements")
+        ]
+        
+        col1, col2 = st.columns(2)
+        for idx, (label, val) in enumerate(starters):
+            with (col1 if idx % 2 == 0 else col2):
+                if st.button(label, key=f"starter_prompt_{idx}", use_container_width=True):
+                    st.session_state["selected_starter"] = val
+                    st.rerun()
+        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+
+    # 4. Chat Input Box (Disabled if pending changes, approvals, or impact analysis are awaiting confirmation)
     user_input = st.chat_input(
-        placeholder="Type a message or edit request..." if not (pending_changes or pending_approval) else "Please confirm, approve, or cancel the pending refinements first...",
-        disabled=bool(pending_changes or pending_approval)
+        placeholder="Type a message or edit request..." if not (pending_changes or pending_approval or pending_impact) else "Please confirm, review, or cancel the pending refinements first...",
+        disabled=bool(pending_changes or pending_approval or pending_impact)
     )
 
-    if user_input:
+    triggered_input = None
+    if "selected_starter" in st.session_state:
+        triggered_input = st.session_state.pop("selected_starter")
+    elif user_input:
+        triggered_input = user_input
+
+    if triggered_input:
         with st.spinner("PM Agent is analyzing your request..."):
             try:
                 from backend.agents.workspace_chat import chat_refine_workspace
                 res = chat_refine_workspace(
                     workspace=project,
                     chat_history=chat_history,
-                    user_message=user_input
+                    user_message=triggered_input
                 )
                 # Sync response deliverables and metadata back to session state
                 project["deliverables"] = res["deliverables"]
@@ -1147,6 +1296,239 @@ def render_traceability_explorer() -> None:
         mermaid_code += "    classDef selected fill:#4F8CFF22,stroke:#4F8CFF,stroke-width:2px,color:#4F8CFF;\n"
         
         st.markdown(f"```mermaid\n{mermaid_code}\n```")
+
+
+def render_prd_entities(prd_data: Dict[str, Any]) -> None:
+    """Renders the canonical PRD entities into a beautiful human-readable layout."""
+    import streamlit as st
+    if not prd_data:
+        st.warning("No PRD data found.")
+        return
+
+    # Executive Summary Card
+    ex = prd_data.get("Executive_Summary", {})
+    if isinstance(ex, dict):
+        st.markdown("### 🎯 Executive Summary")
+        st.markdown(f"""
+            <div style='background-color: #111827; padding: 1.25rem; border-radius: 10px; border: 1px solid #1F2937; margin-bottom: 1.5rem;'>
+                <div style='margin-bottom: 0.8rem;'><strong style='color:#F5F5F5;'>Problem:</strong> <span style='color:#D1D5DB;'>{ex.get('problem', 'N/A')}</span></div>
+                <div style='margin-bottom: 0.8rem;'><strong style='color:#F5F5F5;'>Opportunity:</strong> <span style='color:#D1D5DB;'>{ex.get('opportunity', 'N/A')}</span></div>
+                <div style='margin-bottom: 0.8rem;'><strong style='color:#F5F5F5;'>Market Strategy:</strong> <span style='color:#D1D5DB;'>{ex.get('strategy', 'N/A')}</span></div>
+                <div style='margin-bottom: 0.8rem;'><strong style='color:#F5F5F5;'>Timeline:</strong> <span style='color:#D1D5DB;'>{ex.get('timeline', 'N/A')}</span></div>
+                <div style='margin-bottom: 0.8rem;'><strong style='color:#F5F5F5;'>Investment Summary:</strong> <span style='color:#D1D5DB;'>{ex.get('investment_summary', 'N/A')}</span></div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Product Vision
+    vision = prd_data.get("Product_Vision", "")
+    if vision:
+        st.markdown("### 🔭 Product Vision")
+        st.markdown(f"""
+            <div style='background-color: #1E293B; border-left: 4px solid #4F8CFF; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; color: #D1D5DB; font-style: italic;'>
+                "{vision}"
+            </div>
+        """, unsafe_allow_html=True)
+        
+    # Personas Grid
+    personas = prd_data.get("User_Personas", [])
+    if personas:
+        st.markdown("### 👥 User Personas")
+        cols = st.columns(len(personas))
+        for idx, p in enumerate(personas):
+            with cols[idx]:
+                pname = p.get("name", "User Persona")
+                pid = p.get("id", f"PE-{idx+1}")
+                prole = p.get("role", "")
+                pgoals = p.get("goals", [])
+                pgoals_str = "".join(f"<li>{g}</li>" for g in pgoals)
+                pfru = p.get("pain_points") or p.get("frustrations") or []
+                pfru_str = "".join(f"<li>{f}</li>" for f in pfru)
+                st.markdown(f"""
+                    <div style='background-color: #0F172A; border: 1px solid #1F2937; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;'>
+                        <div style='display:flex; justify-content:space-between; align-items:center;'>
+                            <strong style='color: #F5F5F5; font-size:1.05rem;'>{pname}</strong>
+                            <span style='background:#4F8CFF22; color:#4F8CFF; font-size:0.75rem; padding:2px 8px; border-radius:10px;'>{pid}</span>
+                        </div>
+                        <div style='color: #9CA3AF; font-size: 0.8rem; margin-top: 0.2rem; font-style: italic;'>{prole}</div>
+                        <hr style='border-top:1px solid #2D2D2D; margin:0.6rem 0;'>
+                        <div style='font-size:0.8rem; color:#D1D5DB;'>
+                            <strong>Core Goals:</strong>
+                            <ul style='margin: 0.2rem 0; padding-left: 1.1rem;'>{pgoals_str or '<li>N/A</li>'}</ul>
+                            <strong>Frustrations:</strong>
+                            <ul style='margin: 0.2rem 0; padding-left: 1.1rem;'>{pfru_str or '<li>N/A</li>'}</ul>
+                            <strong>Technical Proficiency:</strong> {p.get('technical_proficiency', 'Medium')}<br>
+                            <strong>Workflow:</strong> {p.get('daily_workflow') or p.get('workflow', 'N/A')}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+    # Features List
+    features = prd_data.get("Core_Features", [])
+    if features:
+        st.markdown("### ✨ Core Features")
+        for f in features:
+            fid = f.get("id", "FT-XXX")
+            fname = f.get("name", "Feature")
+            fdesc = f.get("description", "")
+            fpersona = f.get("user_persona") or f.get("user_persona_mapping", "N/A")
+            fval = f.get("business_value") or "N/A"
+            fmetrics = ", ".join(f.get("success_metrics", []))
+            
+            with st.expander(f"⚙️ {fid} — {fname} ({f.get('priority', 'Medium')})"):
+                st.markdown(f"""
+                    <div style='font-size: 0.9rem; color: #D1D5DB;'>
+                        <p>{fdesc}</p>
+                        <strong>User Persona:</strong> {fpersona}<br>
+                        <strong>Business Value:</strong> {fval}<br>
+                        <strong>Success Metrics:</strong> {fmetrics}<br>
+                        <strong>Confidence:</strong> {f.get('confidence', '0.9')}<br>
+                        <strong>Risk Score:</strong> {f.get('risk_score', 'N/A')}/10
+                    </div>
+                """, unsafe_allow_html=True)
+
+    # Functional Requirements List
+    frs = prd_data.get("Functional_Requirements", [])
+    if frs:
+        st.markdown("### ⚙️ Functional Requirements")
+        for fr in frs:
+            frid = fr.get("id", "FR-XXX")
+            title = fr.get("title", "Requirement")
+            desc = fr.get("description", "")
+            ac_list = fr.get("acceptance_criteria", [])
+            ac_str = "".join(f"<li>{ac}</li>" for ac in ac_list)
+            
+            with st.expander(f"📋 {frid} — {title} ({fr.get('priority', 'Medium')})"):
+                st.markdown(f"""
+                    <div style='font-size: 0.9rem; color: #D1D5DB;'>
+                        <p>{desc}</p>
+                        <strong>Acceptance Criteria:</strong>
+                        <ul style='margin-top: 0.2rem; padding-left: 1.2rem;'>{ac_str or '<li>N/A</li>'}</ul>
+                        <strong>Business Value:</strong> {fr.get('business_value', 'N/A')}<br>
+                        <strong>User Persona:</strong> {fr.get('user_persona', 'N/A')}<br>
+                        <strong>Edge Cases:</strong> {", ".join(fr.get('edge_cases', [])) or 'None'}<br>
+                        <strong>Dependencies:</strong> {", ".join(fr.get('dependencies', [])) or 'None'}<br>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+    # Non-Functional Requirements
+    nfrs = prd_data.get("Non_Functional_Requirements", {})
+    if nfrs:
+        st.markdown("### ⚙️ Non-Functional Requirements")
+        nfr_cols = st.columns(2)
+        items = list(nfrs.items())
+        for idx, (n_title, n_desc) in enumerate(items):
+            col = nfr_cols[idx % 2]
+            with col:
+                st.markdown(f"""
+                    <div style='background-color: #1E1E1E; padding: 1rem; border-radius: 6px; border: 1px solid #2A2A2A; margin-bottom: 0.75rem;'>
+                        <strong style='color: #4F8CFF; font-size: 0.9rem;'>{n_title}</strong>
+                        <div style='color: #D1D5DB; font-size: 0.85rem; margin-top: 0.25rem;'>{n_desc}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+
+def render_roadmap_entities(phases: List[Dict[str, Any]]) -> None:
+    """Renders the canonical Roadmap phases into an interactive timeline UI."""
+    import streamlit as st
+    if not phases:
+        st.warning("No Roadmap phases found.")
+        return
+
+    st.markdown("### 🗓️ Phased Product Roadmap")
+    for ph in phases:
+        phase_id = ph.get("id", "SP-XXX")
+        phase_name = ph.get("phase", "Phase")
+        quarter = ph.get("quarter", "")
+        objs = ph.get("objectives", [])
+        objs_str = "".join(f"<li>{o}</li>" for o in objs)
+        milestones = ph.get("milestones", [])
+        miles_str = "".join(
+            f"<li><strong>{m['date']}</strong>: {m['description']}</li>" if isinstance(m, dict) else f"<li>{m}</li>"
+            for m in milestones
+        )
+        gngo = ph.get("go_no_go_criteria", [])
+        gngo_str = "".join(f"<li>{c}</li>" for c in gngo)
+        
+        st.markdown(f"""
+            <div style='border: 1px solid #2D2D2D; border-radius: 8px; padding: 1.25rem; background-color: #111827; margin-bottom: 1rem;'>
+                <div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;'>
+                    <span style='font-size:1.15rem; font-weight:700; color:#F5F5F5;'>{phase_id} — {phase_name} ({quarter})</span>
+                    <span style='background:#A855F722; color:#A855F7; font-size:0.75rem; padding:3px 9px; border-radius:12px; font-weight:600;'>{ph.get('status', 'Planned')}</span>
+                </div>
+                <hr style='border-top:1px solid #2D2D2D; margin:0.8rem 0;'>
+                <div style='font-size:0.88rem; color:#D1D5DB;'>
+                    <strong>Objectives:</strong>
+                    <ul style='margin-top: 0.2rem; padding-left:1.2rem;'>{objs_str or '<li>N/A</li>'}</ul>
+                    <strong>Milestones:</strong>
+                    <ul style='margin-top: 0.2rem; padding-left:1.2rem;'>{miles_str or '<li>N/A</li>'}</ul>
+                    <strong>Go/No-Go Launch Gates:</strong>
+                    <ul style='margin-top: 0.2rem; padding-left:1.2rem;'>{gngo_str or '<li>N/A</li>'}</ul>
+                    <div style='margin-top:0.5rem; font-size:0.78rem; color:#6B7280;'>
+                        Confidence: {ph.get('confidence', '0.9')} | Priority Score: {ph.get('priority_score', 'N/A')}/10 | Risk: {ph.get('risk_score', 'N/A')}/10
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+
+def render_jira_entities(tasks: List[Dict[str, Any]]) -> None:
+    """Renders canonical Jira Task entities grouped by type as a styled backlog board."""
+    import streamlit as st
+    if not tasks:
+        st.warning("No Jira tasks found.")
+        return
+
+    # Group by type
+    by_type: Dict[str, List] = {}
+    for task in tasks:
+        ttype = task.get("type", "Other")
+        by_type.setdefault(ttype, []).append(task)
+
+    TYPE_ICONS = {
+        "Frontend": "💻", "Backend": "⚙️", "Database": "💾",
+        "API": "🔗", "Testing": "🧪", "DevOps": "🚀", "Documentation": "📝",
+    }
+
+    st.markdown("### 🎫 Engineering Backlog & Jira Tasks")
+    
+    for ttype in ["Frontend", "Backend", "Database", "API", "Testing", "DevOps", "Documentation"]:
+        group = by_type.get(ttype, [])
+        if not group:
+            continue
+            
+        icon = TYPE_ICONS.get(ttype, "🎫")
+        st.markdown(f"#### {icon} {ttype} Backlog ({len(group)} tasks)")
+        
+        for task in group:
+            tid = task.get("id", "JT-XXX")
+            title = task.get("title", "")
+            desc = task.get("description", "")
+            pri = task.get("priority", "Medium")
+            est = task.get("estimate", {})
+            hours = est.get("hours", "?")
+            sp = est.get("story_points", "?")
+            status = task.get("status", "To Do")
+            
+            pri_c = PRIORITY_COLOURS.get(pri, "#6B7280")
+            stat_c = STATUS_COLOURS.get(status, "#6B7280")
+            
+            with st.expander(f"{tid} — {title} ({sp} SP / {hours}h)"):
+                st.markdown(f"""
+                    <div style='font-size: 0.88rem; color: #D1D5DB;'>
+                        <p>{desc}</p>
+                        <div style='display:flex; gap:10px; margin-bottom: 0.6rem;'>
+                            Priority: {_badge(pri, pri_c)}
+                            Status: {_badge(status, stat_c)}
+                        </div>
+                        <strong>Acceptance Criteria:</strong>
+                        <ul style='margin-top:0.2rem; padding-left:1.2rem;'>
+                            {"".join(f"<li>{a}</li>" for a in task.get("acceptance_criteria", [])) or '<li>N/A</li>'}
+                        </ul>
+                        <strong>Dependencies:</strong> {", ".join(task.get("dependencies", [])) or 'None'}<br>
+                        <strong>Labels:</strong> {", ".join(task.get("labels", [])) or 'None'}<br>
+                        <strong>Implements:</strong> {", ".join(task.get("traceability", {}).get("implements", [])) or 'None'}
+                    </div>
+                """, unsafe_allow_html=True)
 
 
 

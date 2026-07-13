@@ -11,20 +11,37 @@ from backend.agents.dependency_analyzer import DependencyAnalyzer
 
 logger = logging.getLogger(__name__)
 
-CHAT_RESPONSE_PROMPT = """You are a senior Product Manager leading an iterative product refinement.
-You have access to the complete workspace context and the user's conversation history.
+ASK_PRODUCTPILOT_SYSTEM_PROMPT = """You are a Principal Product Manager leading a product workspace refinement.
+You have access to the complete workspace context (Idea, Intent, Business Analysis, PRD, User Stories, Roadmap, Jira Tasks, Traceability Graph, and Validation Results) and the user's conversation history.
 
-Analyze the user's message.
-1. If the message is a conversational query or request for information (e.g., "Explain how security is handled", "What are the core features?"), answer the user comprehensively and set "is_refinement" to false.
-2. If the message contains a request to change, add, delete, or refine the product requirements (e.g., "Add subscription billing", "Target enterprise customers", "Change authentication to SSO"), explain what changes will be applied to the product specs and set "is_refinement" to true.
+Analyze the user's message and follow these rules:
+
+1. UNDERSTANDING, ANALYSIS & CRITIQUE:
+- You must reason over the existing workspace context rather than inventing information.
+- Use the Traceability Graph before answering to identify structural relationships between business goals, personas, features, requirements, user stories, and tasks.
+- Reference existing entity IDs (e.g. BG-001, FT-001, FR-001, PE-001, US-001, JT-001). Never invent relationships or IDs.
+- If the workspace lacks enough information to answer a question or perform an analysis, explicitly state that.
+
+2. STRUCTURED RECOMMENDATIONS:
+When providing strategic recommendations or critique, you MUST structure your response (within the JSON chat_response string) to include the following sections (formatted as markdown):
+- **Reasoning**: Why you are making this recommendation (gap or opportunity).
+- **Business Impact**: Impact on KPIs, target values, and personas.
+- **Engineering Impact**: Impact on story points, developer tasks, or complexity.
+- **Risks**: Potential downstream risks or release risks.
+- **Recommendation**: Your concrete, actionable proposal.
+- **Confidence**: A numeric confidence rating between 0% and 100%.
+
+3. CONVERSATIONAL VS. MODIFICATION CLASSIFICATION:
+- If the user's message is a conversational query, critique, or request for information (e.g., "Summarize this project", "Are there inconsistencies?", "Which requirements have weak ACs?", "Suggest MVP scope"), answer the user comprehensively and set "is_refinement" to false.
+- If the user explicitly requests changes, additions, deletions, or scope modifications (e.g., "Add subscription billing", "Remove drone delivery", "Change authentication to SSO"), explain the proposed changes and set "is_refinement" to true.
 
 You MUST respond ONLY with a raw JSON object matching the following structure:
 {
-  "chat_response": "Your professional PM response or explanation of proposed refinements.",
+  "chat_response": "Your professional PM response, formatted beautifully with markdown. If recommending, use the structured layout.",
   "is_refinement": true / false
 }
 
-Do not include markdown code fences or conversational text outside the JSON. Return only the valid JSON.
+Do not include markdown code fences (like ```json) or conversational text outside the JSON. Return only the valid JSON.
 """
 
 class WorkspaceChatAgent(BaseAgent):
@@ -43,11 +60,27 @@ class WorkspaceChatAgent(BaseAgent):
             role = "User" if msg["role"] == "user" else "PM"
             history_str += f"{role}: {msg['content']}\n"
             
+        # Assemble complete WorkspaceContext payload for the LLM
         user_prompt = f"""=== ACTIVE WORKSPACE SPECS ===
-Idea: {context.idea}
-Intent: {json.dumps(context.intent_context, indent=2)}
-Goals: {json.dumps(context.business_analysis.get("Goals", []), indent=2)}
-Features: {json.dumps(context.prd.get("Core_Features", []), indent=2)}
+Product Idea: {context.idea}
+
+Intent Context:
+{json.dumps(context.intent_context, indent=2)}
+
+Business Analysis:
+{json.dumps(context.business_analysis, indent=2)}
+
+Product Requirements Document (PRD):
+{json.dumps(context.prd, indent=2)}
+
+Deliverables (User Stories, Roadmap, Jira Tasks):
+{json.dumps({k: v for k, v in context.deliverables.items() if k not in ["Business Analysis", "Product Requirements Document (PRD)"]}, indent=2)}
+
+Traceability Graph:
+{json.dumps(context.metadata.get("entity_graph", {}), indent=2)}
+
+Validation Results:
+{json.dumps(context.metadata.get("validation_report", {}), indent=2)}
 
 === CONVERSATION HISTORY ===
 {history_str}
@@ -59,7 +92,7 @@ User: {user_message}
         llm = get_llm()
         model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
         messages = [
-            ("system", CHAT_RESPONSE_PROMPT),
+            ("system", ASK_PRODUCTPILOT_SYSTEM_PROMPT),
             ("user", user_prompt)
         ]
         
@@ -75,12 +108,14 @@ User: {user_message}
                     lines = lines[:-1]
                 raw_text = "\n".join(lines).strip()
                 
-            result_data = json.loads(raw_text)
+            result_data = json.loads(raw_text, strict=False)
         except Exception as e:
             logger.error(f"Workspace Chat Agent LLM parse failed: {e}")
+            if 'raw_text' in locals():
+                logger.error(f"Raw text that failed parsing:\n{raw_text}")
             result_data = {
-                "chat_response": "I can help you refine the project specs. Please let me know what updates you want to make.",
-                "is_refinement": True
+                "chat_response": "I can help you analyze, critique, or modify the project deliverables. Please ask me a question or suggest updates.",
+                "is_refinement": False
             }
             
         is_refinement = bool(result_data.get("is_refinement", False))
@@ -89,34 +124,16 @@ User: {user_message}
         new_metadata = context.metadata.copy()
         new_metadata["chat_response"] = chat_response
         
-        # If it is a refinement request, run the dependency analyzer to find affected components
+        # If it is a refinement request, run the Change Impact Analysis
         if is_refinement:
-            analyzer = DependencyAnalyzer()
-            affected = analyzer.analyze(user_message)
-            
-            # Detect destructive/critical scope changes needing human confirmation
-            msg_lower = user_message.lower()
-            destructive_keywords = [
-                "delete", "remove", "change persona", "target audience", "pricing", 
-                "pricing model", "billing", "sso", "authentication", "replace"
-            ]
-            requires_approval = any(kw in msg_lower for kw in destructive_keywords) or sum(affected.values()) > 3
-            
-            proposal_dict = {
-                "instruction": user_message,
-                "affected": affected,
-                "impact": "Destructive update affecting core deliverables (e.g. personas, target audience, pricing models)." if requires_approval else "Incremental spec optimization.",
-                "regeneration_time": "15-30s",
-                "requires_approval": requires_approval
-            }
-            
-            if requires_approval:
-                new_metadata["pending_approval"] = proposal_dict
-                new_metadata.pop("pending_changes", None)
-            else:
-                new_metadata["pending_changes"] = proposal_dict
-                new_metadata.pop("pending_approval", None)
+            impact_agent = registry.get("impact_analysis")
+            context = impact_agent.execute(context, instruction=user_message)
+            new_metadata = context.metadata.copy()
+            # Clear legacy variables to prevent collisions
+            new_metadata.pop("pending_changes", None)
+            new_metadata.pop("pending_approval", None)
         else:
+            new_metadata.pop("pending_impact", None)
             new_metadata.pop("pending_changes", None)
             new_metadata.pop("pending_approval", None)
             
@@ -162,6 +179,7 @@ def chat_refine_workspace(
     return {
         "chat_response": result_context.metadata.get("chat_response", ""),
         "pending_changes": result_context.metadata.get("pending_changes"),
+        "pending_impact": result_context.metadata.get("pending_impact"),
         "metadata": result_context.metadata,
         "deliverables": result_context.deliverables
     }
@@ -229,6 +247,7 @@ def apply_workspace_refinements(
     snapshot_ctx = context.clone()
     snapshot_ctx.metadata.pop("pending_changes", None)
     snapshot_ctx.metadata.pop("pending_approval", None)
+    snapshot_ctx.metadata.pop("pending_impact", None)
     snapshot_dict = snapshot_ctx.to_dict()
     
     version_entry = {
@@ -255,7 +274,22 @@ def apply_workspace_refinements(
     }
     context.metadata["decision_log"].append(decision_entry)
     
-    # Clear pending changes
+    # Rebuild entity graph and persistent ID mappings
+    from backend.agents.traceability_engine import TraceabilityEngine
+    engine = TraceabilityEngine(context.to_dict())
+    context.metadata["entity_graph"] = engine.metadata.get("entity_graph", {})
+    context.metadata["id_mappings"] = engine.metadata.get("id_mappings", {})
+
+    # Run Validation Agent to verify dependency integrity
+    validation_agent = registry.get("validation_agent")
+    try:
+        context = validation_agent.execute(context)
+        logger.info("Validation Agent successfully verified workspace integrity after refinement.")
+    except Exception as e:
+        logger.error(f"Validation Agent verification failed: {e}")
+
+    # Clear pending refinements
     context.metadata.pop("pending_changes", None)
+    context.metadata.pop("pending_impact", None)
     
     return context.to_dict()
