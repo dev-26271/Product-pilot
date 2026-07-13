@@ -15,9 +15,13 @@ class IntentExtractorAgent(BaseAgent):
     """Agent that extracts structured intent and classifications from a raw idea."""
     
     def execute(self, context: WorkspaceContext, **kwargs) -> WorkspaceContext:
-        logger.info("Executing IntentExtractorAgent...")
+        logger.info("Running IntentExtractorAgent...")
         start_time = time.perf_counter()
         
+        from backend.profiler import PerformanceProfiler
+        profiler = PerformanceProfiler.get_instance()
+        
+        profiler.start_sub("Prompt Construction")
         # Pull pre-parsed metadata passed as kwargs (if any) to guide the LLM
         pre_parsed = kwargs.get("pre_parsed_metadata", {})
         
@@ -33,14 +37,19 @@ Pre-parsed Metadata (if any):
             ("system", INTENT_EXTRACTOR_SYSTEM_PROMPT),
             ("user", user_message)
         ]
+        profiler.end_sub("Prompt Construction")
         
+        profiler.start_sub("LLM Invocation")
         llm = get_llm()
         model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
         
+        raw_text = ""
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
+            profiler.end_sub("LLM Invocation")
             
+            profiler.start_sub("Response Parsing")
             # Clean fences
             if raw_text.startswith("```"):
                 lines = raw_text.splitlines()
@@ -51,7 +60,10 @@ Pre-parsed Metadata (if any):
                 raw_text = "\n".join(lines).strip()
                 
             intent_json = json.loads(raw_text)
+            profiler.end_sub("Response Parsing")
         except Exception as e:
+            profiler.end_sub("LLM Invocation")
+            profiler.end_sub("Response Parsing")
             logger.error(f"Intent Extraction LLM invoke or parse failed: {e}")
             # Sensible fallback JSON
             intent_json = {
@@ -73,6 +85,7 @@ Pre-parsed Metadata (if any):
             }
             
         # Ensure all required fields exist
+        profiler.start_sub("Validation Audits")
         required_keys = [
             "project_name", "industry", "product_type", "audience", "primary_users",
             "problem_statement", "business_objective", "core_features", "constraints",
@@ -92,7 +105,7 @@ Pre-parsed Metadata (if any):
         audience_meta = intent_json.get("audience", {})
         if not isinstance(audience_meta, dict):
             intent_json["audience"] = {"value": audience_meta, "confidence": 0.9}
-
+ 
         # Respect manual UI selection if passed in kwargs
         if pre_parsed.get("industry") and pre_parsed["industry"] != "Auto Detect":
             intent_json["industry"] = {"value": pre_parsed["industry"], "confidence": 1.0}
@@ -100,7 +113,9 @@ Pre-parsed Metadata (if any):
             intent_json["product_type"] = {"value": pre_parsed["product_type"], "confidence": 1.0}
         if pre_parsed.get("audience") and pre_parsed["audience"] != "Auto Detect":
             intent_json["audience"] = {"value": pre_parsed["audience"], "confidence": 1.0}
-
+        profiler.end_sub("Validation Audits")
+ 
+        profiler.start_sub("Formatting & Markdown")
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         
         # Update metadata dict inside context
@@ -127,10 +142,12 @@ Pre-parsed Metadata (if any):
         }
         
         # Return new cloned context
-        return context.clone(
+        res_ctx = context.clone(
             intent_context=intent_json,
             metadata=new_metadata
         ).add_agent_log(log_entry)
+        profiler.end_sub("Formatting & Markdown")
+        return res_ctx
 
 # Auto-register agent
 registry.register("intent_extractor", IntentExtractorAgent())

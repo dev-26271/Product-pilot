@@ -98,6 +98,7 @@ def infer_project_metadata(idea: str) -> Dict[str, str]:
         # Fall back to lightweight LLM classifier for remaining fields
         from backend.llm import get_llm
         
+        profiler.start_sub("Prompt Construction")
         system_prompt = """You are a product classifier. Given a product idea, return a JSON object with exactly three keys:
 {
   "industry": "<one of: Healthcare, Finance, Education, Retail, Logistics, Travel, Real Estate, HR, Legal, Entertainment, Food & Beverage, Agriculture, Government, Technology, Other>",
@@ -111,15 +112,20 @@ Rules:
 - If uncertain, choose the closest reasonable option.
 """
         user_message = f"Product idea: {idea}\nFast Pre-parsed defaults: {fast_inferred}"
+        profiler.end_sub("Prompt Construction")
         
+        raw = ""
         try:
+            profiler.start_sub("LLM Invocation")
             llm = get_llm()
             response = llm.invoke([
                 ("system", system_prompt),
                 ("user", user_message),
             ])
             raw = response.content.strip()
+            profiler.end_sub("LLM Invocation")
             
+            profiler.start_sub("Response Parsing")
             # Strip code fences if present
             if raw.startswith("```"):
                 lines = raw.splitlines()
@@ -130,7 +136,9 @@ Rules:
                 raw = "\n".join(lines).strip()
             
             data = json.loads(raw)
+            profiler.end_sub("Response Parsing")
             
+            profiler.start_sub("Formatting & Markdown")
             # Combine fast parser results with LLM results
             final_inferred = {
                 "industry": fast_inferred.get("industry") or data.get("industry", "Other"),
@@ -138,8 +146,12 @@ Rules:
                 "audience": fast_inferred.get("audience") or data.get("audience", "B2C"),
             }
             logger.info(f"Metadata inference completed successfully: {final_inferred}")
+            profiler.end_sub("Formatting & Markdown")
             return final_inferred
         except Exception as e:
+            profiler.end_sub("LLM Invocation")
+            profiler.end_sub("Response Parsing")
+            profiler.end_sub("Formatting & Markdown")
             logger.warning(f"Lightweight LLM metadata classification failed, using fallbacks: {e}")
             return {
                 "industry": fast_inferred.get("industry", "Other"),
@@ -290,9 +302,9 @@ class PythonLocalStrategy(OrchestrationStrategy):
         
         profiler.set_duration("Validation", validation_total)
         profiler.set_duration("Repair Loop", repair_total)
-        
-        # Build and update entity_graph in context metadata
+               # Build and update entity_graph in context metadata
         from backend.agents.traceability_engine import TraceabilityEngine
+        profiler.start("Traceability Graph")
         try:
             engine = TraceabilityEngine(context.to_dict())
             context.metadata["entity_graph"] = engine.metadata.get("entity_graph", {})
@@ -300,23 +312,29 @@ class PythonLocalStrategy(OrchestrationStrategy):
             logger.info("TraceabilityEngine successfully built entity graph for workspace context.")
         except Exception as e:
             logger.error(f"Failed to build initial entity graph: {e}")
- 
+        profiler.end("Traceability Graph")
+  
         # 6. Step 5: Planning Agent execution
         planning_agent = registry.get("planning_agent")
+        profiler.start("Planning Agent")
         try:
             context = planning_agent.execute(context)
         except Exception as e:
             logger.error(f"Planning Agent execution failed during orchestration: {e}")
+        profiler.end("Planning Agent")
             
         total_duration = time.perf_counter() - start_time
         logger.info(f"Initial Multi-Agent PRD pipeline completed in {total_duration:.4f} seconds.")
         profiler.end("TOTAL")
         
+        # Generate summary report first to calculate and populate Orchestration Overhead
+        summary_report = profiler.summary()
+        
         # Save timings inside context
         context.performance.update(profiler.timings)
         
         # Print clean timing report automatically to standard output
-        print(profiler.summary())
+        print(summary_report)
         
         # Return serializable dict output maintaining backwards compatibility with UI
         import copy

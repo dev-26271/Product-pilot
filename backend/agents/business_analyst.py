@@ -1,4 +1,4 @@
-﻿import json
+import json
 import time
 import logging
 from datetime import datetime, timezone
@@ -23,17 +23,23 @@ class BusinessAnalystAgent(BaseAgent):
     def execute(self, context: WorkspaceContext, **kwargs) -> WorkspaceContext:
         logger.info("Executing BusinessAnalystAgent...")
         start_time = time.perf_counter()
+        
+        from backend.profiler import PerformanceProfiler
+        profiler = PerformanceProfiler.get_instance()
 
         intent = context.intent_context
         problem = intent.get("problem_statement", "")
         features_list = intent.get("core_features", [])
 
+        profiler.start_sub("RAG Loading & Search")
         retrieval_query = f"{problem} {' '.join(features_list)}".strip() or context.idea
         logger.info(f"Retrieving business KB context for query: '{retrieval_query[:50]}...'")
         context_docs = retrieve_business(retrieval_query, k=2)
         context_str = "\n\n".join([doc.page_content for doc in context_docs])
         logger.info(f"Retrieved {len(context_docs)} chunks from business index.")
+        profiler.end_sub("RAG Loading & Search")
 
+        profiler.start_sub("Prompt Construction")
         user_message = f"""RAG Context:
 {context_str}
 
@@ -52,24 +58,36 @@ Current UTC timestamp: {datetime.now(timezone.utc).isoformat()}
             ("system", BUSINESS_ANALYST_SYSTEM_PROMPT),
             ("user", user_message)
         ]
+        profiler.end_sub("Prompt Construction")
 
+        profiler.start_sub("LLM Invocation")
+        raw_text = ""
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
+            profiler.end_sub("LLM Invocation")
+            
+            profiler.start_sub("Response Parsing")
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
             elif raw_text.startswith("```"):
                 lines = raw_text.splitlines()
                 raw_text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
             ba_json = json.loads(raw_text)
+            profiler.end_sub("Response Parsing")
         except Exception as e:
+            profiler.end_sub("LLM Invocation")
+            profiler.end_sub("Response Parsing")
             logger.error(f"Business Analyst LLM invoke or parse failed: {e}")
             ba_json = _fallback_ba(intent)
 
         # --- Post-processing & validation ---
+        profiler.start_sub("Validation Audits")
         ba_json = _normalise_ba(ba_json, intent)
         _log_entity_warnings(ba_json)
+        profiler.end_sub("Validation Audits")
 
+        profiler.start_sub("Formatting & Markdown")
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         log_entry = {
             "agent": "BusinessAnalystAgent",
@@ -81,7 +99,9 @@ Current UTC timestamp: {datetime.now(timezone.utc).isoformat()}
             "version": "3.0.0",
         }
 
-        return context.clone(business_analysis=ba_json).add_agent_log(log_entry)
+        res_ctx = context.clone(business_analysis=ba_json).add_agent_log(log_entry)
+        profiler.end_sub("Formatting & Markdown")
+        return res_ctx
 
 
 # ---------------------------------------------------------------------------

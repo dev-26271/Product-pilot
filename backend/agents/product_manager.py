@@ -23,6 +23,9 @@ class ProductManagerAgent(BaseAgent):
         logger.info("Executing ProductManagerAgent...")
         start_time = time.perf_counter()
         
+        from backend.profiler import PerformanceProfiler
+        profiler = PerformanceProfiler.get_instance()
+        
         intent = context.intent_context
         ba = context.business_analysis
         
@@ -31,6 +34,7 @@ class ProductManagerAgent(BaseAgent):
         current_prd_draft = kwargs.get("current_prd_draft", {})
         
         # Step 1: Query RAG product database
+        profiler.start_sub("RAG Loading & Search")
         problem = intent.get("problem_statement", "")
         features = " ".join(intent.get("core_features", []))
         retrieval_query = f"{problem} {features}".strip() or context.idea
@@ -39,8 +43,10 @@ class ProductManagerAgent(BaseAgent):
         context_docs = retrieve_product(retrieval_query, k=2)
         context_str = "\n\n".join([doc.page_content for doc in context_docs])
         logger.info(f"Retrieved {len(context_docs)} chunks from product index.")
+        profiler.end_sub("RAG Loading & Search")
         
         # Step 2: Build user message
+        profiler.start_sub("Prompt Construction")
         user_message = f"""Product Context:
 {context_str}
 
@@ -80,12 +86,17 @@ Return only the complete updated JSON.
             ("system", PRODUCT_MANAGER_SYSTEM_PROMPT),
             ("user", user_message)
         ]
+        profiler.end_sub("Prompt Construction")
         
+        profiler.start_sub("LLM Invocation")
+        raw_text = ""
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
+            profiler.end_sub("LLM Invocation")
             
             # Clean fences
+            profiler.start_sub("Response Parsing")
             if raw_text.startswith("```"):
                 lines = raw_text.splitlines()
                 if lines[0].startswith("```"):
@@ -95,7 +106,10 @@ Return only the complete updated JSON.
                 raw_text = "\n".join(lines).strip()
                 
             pm_json = json.loads(raw_text)
+            profiler.end_sub("Response Parsing")
         except Exception as e:
+            profiler.end_sub("LLM Invocation")
+            profiler.end_sub("Response Parsing")
             logger.error(f"Product Manager LLM invoke or parse failed: {e}")
             if repair_feedback and current_prd_draft:
                 pm_json = current_prd_draft
@@ -119,7 +133,7 @@ Return only the complete updated JSON.
                     aud_name = str(aud_val) if aud_val else "Users"
                 
                 generated_vision = f"To build a state-of-the-art {prod_name.lower()} that simplifies processes and enhances capabilities for {aud_name.lower()} in the {ind_name.lower()} market."
-
+ 
                 
                 raw_features = intent.get("core_features", [])
                 if not raw_features:
@@ -170,16 +184,17 @@ Return only the complete updated JSON.
                     "Success_Metrics": ["System uptime > 99.9%", "User CSAT > 90%"],
                     "Open_Questions": ["Third-party API integration scope"]
                 }
-
+ 
                 
         # Validate critical keys
+        profiler.start_sub("Validation Audits")
         required_keys = ["Executive_Summary", "Functional_Requirements", "Core_Features", "Success_Metrics"]
         for key in required_keys:
             if key not in pm_json:
                 pm_json[key] = [] if key != "Executive_Summary" else "Unknown"
                 
         duration_ms = int((time.perf_counter() - start_time) * 1000)
-
+ 
         log_entry = {
             "agent": "ProductManagerAgent",
             "model": model_name,
@@ -192,6 +207,9 @@ Return only the complete updated JSON.
         
         # --- Validate canonical entities ---
         _log_entity_warnings(pm_json)
+        profiler.end_sub("Validation Audits")
+        
+        profiler.start_sub("Formatting & Markdown")
 
         # 1. Executive Summary — handle both new dict format and legacy string
         exec_summary_raw = pm_json.get("Executive_Summary", "")
@@ -349,10 +367,10 @@ Return only the complete updated JSON.
         
         if context.metadata.get("risk_analysis", True):
             prd_content["\u26a0\ufe0f Risk Factors"] = "See Risk Factors in the Executive Summary and individual Functional Requirements above."
-
+ 
         prd_content = {k: str(v) for k, v in prd_content.items() if v and (str(v).strip() if isinstance(v, str) else True)}
-
-        return context.clone(
+ 
+        res_ctx = context.clone(
             prd=pm_json,
             deliverables={
                 "Product Requirements Document (PRD)": {
@@ -365,6 +383,8 @@ Return only the complete updated JSON.
                 }
             }
         ).add_agent_log(log_entry)
+        profiler.end_sub("Formatting & Markdown")
+        return res_ctx
 
 # Auto-register agent
 registry.register("product_manager", ProductManagerAgent())

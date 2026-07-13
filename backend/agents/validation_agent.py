@@ -19,43 +19,56 @@ class ValidationAgent(BaseAgent):
     def execute(self, context: WorkspaceContext, **kwargs) -> WorkspaceContext:
         logger.info("Executing ValidationAgent...")
         start_time = time.perf_counter()
-
+        
+        from backend.profiler import PerformanceProfiler
+        profiler = PerformanceProfiler.get_instance()
+ 
+        profiler.start_sub("Prompt Construction")
         user_message = f"""=== INTENT CONTEXT ===
 {json.dumps(context.intent_context, indent=2)}
-
+ 
 === BUSINESS ANALYSIS ===
 {json.dumps(context.business_analysis, indent=2)}
-
+ 
 === PRODUCT REQUIREMENTS DOCUMENT (PRD) ===
 {json.dumps(context.prd, indent=2)}
-
+ 
 === USER STORIES (if generated) ===
 {json.dumps(context.deliverables.get('User Stories', {}), indent=2)}
-
+ 
 === JIRA TASKS (if generated) ===
 {json.dumps(context.deliverables.get('Jira Tasks', {}), indent=2)}
-
+ 
 === ROADMAP (if generated) ===
 {json.dumps(context.deliverables.get('Product Roadmap', {}), indent=2)}
 """
-
+ 
         llm = get_llm()
         model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
         messages = [
             ("system", VALIDATION_AGENT_SYSTEM_PROMPT),
             ("user", user_message),
         ]
-
+        profiler.end_sub("Prompt Construction")
+ 
+        profiler.start_sub("LLM Invocation")
+        raw_text = ""
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
+            profiler.end_sub("LLM Invocation")
+            
+            profiler.start_sub("Response Parsing")
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
             elif raw_text.startswith("```"):
                 lines = raw_text.splitlines()
                 raw_text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
             val_json = json.loads(raw_text)
+            profiler.end_sub("Response Parsing")
         except Exception as e:
+            profiler.end_sub("LLM Invocation")
+            profiler.end_sub("Response Parsing")
             logger.error(f"Validation Agent LLM invoke or parse failed: {e}")
             val_json = {
                 "valid": True,
@@ -72,6 +85,7 @@ class ValidationAgent(BaseAgent):
             }
 
         # Normalise: ensure backwards-compatible fields
+        profiler.start_sub("Validation Audits")
         if "valid" not in val_json:
             val_json["valid"] = len(val_json.get("errors", [])) == 0
         if "errors" not in val_json:
@@ -116,7 +130,9 @@ class ValidationAgent(BaseAgent):
             f"ER: {dims.get('engineering_readiness',{}).get('score','?')} "
             f"Overall: {overall}"
         )
-
+        profiler.end_sub("Validation Audits")
+ 
+        profiler.start_sub("Formatting & Markdown")
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         log_entry = {
             "agent": "ValidationAgent",
@@ -130,7 +146,9 @@ class ValidationAgent(BaseAgent):
 
         new_metadata = context.metadata.copy()
         new_metadata["validation_report"] = val_json
-        return context.clone(metadata=new_metadata).add_agent_log(log_entry)
+        res_ctx = context.clone(metadata=new_metadata).add_agent_log(log_entry)
+        profiler.end_sub("Formatting & Markdown")
+        return res_ctx
 
 
 def _validate_dependencies(context: WorkspaceContext) -> list:

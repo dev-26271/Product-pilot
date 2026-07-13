@@ -54,15 +54,19 @@ class PlanningAgent(BaseAgent):
         logger.info("Executing PlanningAgent...")
         start_time = time.perf_counter()
         
+        from backend.profiler import PerformanceProfiler
+        profiler = PerformanceProfiler.get_instance()
+ 
+        profiler.start_sub("Prompt Construction")
         user_message = f"""=== INTENT ===
 {json.dumps(context.intent_context, indent=2)}
-
+ 
 === BUSINESS ANALYSIS ===
 {json.dumps(context.business_analysis, indent=2)}
-
+ 
 === PRODUCT REQUIREMENTS DOCUMENT ===
 {json.dumps(context.prd, indent=2)}
-
+ 
 === COMPILED DELIVERABLES ===
 {json.dumps(list(context.deliverables.keys()), indent=2)}
 """
@@ -73,11 +77,16 @@ class PlanningAgent(BaseAgent):
             ("system", PLANNING_AGENT_SYSTEM_PROMPT),
             ("user", user_message)
         ]
+        profiler.end_sub("Prompt Construction")
         
+        profiler.start_sub("LLM Invocation")
+        raw_text = ""
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
+            profiler.end_sub("LLM Invocation")
             
+            profiler.start_sub("Response Parsing")
             # Clean fences
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
@@ -85,7 +94,10 @@ class PlanningAgent(BaseAgent):
                 raw_text = raw_text.split("```")[1].split("```")[0].strip()
                 
             parsed_json = json.loads(raw_text)
+            profiler.end_sub("Response Parsing")
         except Exception as e:
+            profiler.end_sub("LLM Invocation")
+            profiler.end_sub("Response Parsing")
             logger.error(f"Planning Agent parse failed: {e}")
             parsed_json = {
                 "maturity_scores": {"idea": 1.0, "business": 0.5, "requirements": 0.5, "architecture": 0.0, "testing": 0.0},
@@ -93,9 +105,12 @@ class PlanningAgent(BaseAgent):
                 "smart_recommendations": [{"type": "Maturity Heuristic", "description": "Initial setup detected. Refine requirements to improve maturity."}]
             }
             
+        profiler.start_sub("Validation Audits")
         new_metadata = context.metadata.copy()
         new_metadata["planning_analysis"] = parsed_json
+        profiler.end_sub("Validation Audits")
         
+        profiler.start_sub("Formatting & Markdown")
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         log_entry = {
             "agent": "PlanningAgent",
@@ -107,9 +122,11 @@ class PlanningAgent(BaseAgent):
             "version": "2.0.0"
         }
         
-        return context.clone(
+        res_ctx = context.clone(
             metadata=new_metadata
         ).add_agent_log(log_entry)
+        profiler.end_sub("Formatting & Markdown")
+        return res_ctx
 
 # Auto-register agent
 registry.register("planning_agent", PlanningAgent())

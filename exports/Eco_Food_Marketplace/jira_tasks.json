@@ -1,0 +1,12 @@
+{
+  "entities": {
+    "tasks": [
+      {
+        "id": "JT-001",
+        "title": "Setup db schema",
+        "type": "Database",
+        "priority": "High"
+      }
+    ]
+  }
+}

@@ -79,32 +79,46 @@ class BaseDocumentAgent(BaseAgent):
         logger.info(f"Executing {self.agent_name}...")
         start_time = time.perf_counter()
         
+        from backend.profiler import PerformanceProfiler
+        profiler = PerformanceProfiler.get_instance()
+        
         # 1. Validation of required inputs
+        profiler.start_sub("Validation Audits")
         for req in self.required_inputs:
             if req == "prd" and not context.prd:
+                profiler.end_sub("Validation Audits")
                 raise ValueError(f"{self.agent_name} requires a generated PRD. Please generate PRD first.")
             if req == "business_analysis" and not context.business_analysis:
+                profiler.end_sub("Validation Audits")
                 raise ValueError(f"{self.agent_name} requires Business Analysis.")
             if req not in ["prd", "business_analysis", "intent_context", "idea"]:
                 if req not in context.deliverables:
+                    profiler.end_sub("Validation Audits")
                     raise ValueError(f"{self.agent_name} requires dependent deliverable '{req}'. Please generate it first.")
+        profiler.end_sub("Validation Audits")
                     
         # 2. Prompt construction
+        profiler.start_sub("Prompt Construction")
         user_message = self.build_user_message(context)
         messages = [
             ("system", self.system_prompt),
             ("user", user_message)
         ]
+        profiler.end_sub("Prompt Construction")
         
         # 3. LLM invocation
+        profiler.start_sub("LLM Invocation")
         llm = get_llm()
         model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
         
+        raw_text = ""
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
+            profiler.end_sub("LLM Invocation")
             
             # 4. JSON parsing & cleanup
+            profiler.start_sub("Response Parsing")
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
             elif "```" in raw_text:
@@ -122,7 +136,11 @@ class BaseDocumentAgent(BaseAgent):
                         raise parse_err
                 else:
                     raise parse_err
+            profiler.end_sub("Response Parsing")
         except Exception as e:
+            profiler.end_sub("LLM Invocation")
+            # Safe clean for response parsing timer if active
+            profiler.end_sub("Response Parsing")
             logger.error(f"{self.agent_name} LLM invoke or JSON parse failed: {e}")
             logger.error(f"{self.agent_name} raw response content: '{raw_text if 'raw_text' in locals() else 'No raw_text'}'")
             
@@ -138,15 +156,17 @@ class BaseDocumentAgent(BaseAgent):
                 parsed_json = {
                     self.deliverable_key: f"Draft {self.deliverable_key} created."
                 }
-
-
             
         # 5. Schema validation
+        profiler.start_sub("Validation Audits")
         for key in self.output_schema_keys:
             if key not in parsed_json:
+                profiler.end_sub("Validation Audits")
                 raise ValueError(f"Response from {self.agent_name} is missing mandatory schema key: '{key}'")
+        profiler.end_sub("Validation Audits")
                 
         # 6. Post-processing & Output formatting
+        profiler.start_sub("Formatting & Markdown")
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         
         # 7. Agent logging
@@ -166,7 +186,9 @@ class BaseDocumentAgent(BaseAgent):
         else:
             new_deliverables[self.deliverable_key] = parsed_json
             
-        return self.post_processing(parsed_json, context.clone(deliverables=new_deliverables)).add_agent_log(log_entry)
+        res_ctx = self.post_processing(parsed_json, context.clone(deliverables=new_deliverables)).add_agent_log(log_entry)
+        profiler.end_sub("Formatting & Markdown")
+        return res_ctx
 
     def post_processing(self, parsed_json: Dict[str, Any], context: WorkspaceContext) -> WorkspaceContext:
         """Optional hook for subclasses to perform additional context transformations."""

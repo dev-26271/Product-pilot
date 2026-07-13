@@ -1,0 +1,14 @@
+{
+  "entities": {
+    "phases": [
+      {
+        "id": "PH-001",
+        "phase": "MVP Phase",
+        "quarter": "Q4 2026",
+        "objectives": [
+          "Release core drone slots"
+        ]
+      }
+    ]
+  }
+}
