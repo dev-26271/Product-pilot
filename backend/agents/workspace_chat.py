@@ -38,7 +38,19 @@ When providing strategic recommendations or critique, you MUST structure your re
 You MUST respond ONLY with a raw JSON object matching the following structure:
 {
   "chat_response": "Your professional PM response, formatted beautifully with markdown. If recommending, use the structured layout.",
-  "is_refinement": true / false
+  "is_refinement": true / false,
+  "reasoning_trace": {
+    "sources_consulted": ["Business Analysis", "PRD", "User Stories", "Validation Report"],
+    "entities_referenced": ["BG-002", "FR-004"],
+    "traceability_chain": ["BG-002 -> FR-004 -> US-011"],
+    "validation_checks": ["No inconsistencies detected."],
+    "confidence": 0.95,
+    "affected_documents": ["User Stories"],
+    "affected_entities": ["US-011"],
+    "estimated_changes": "Describe the scope of the updates.",
+    "validation_required": "Describe the validation checks that must run.",
+    "recommended_action": "Describe the recommended path to apply updates."
+  }
 }
 
 Do not include markdown code fences (like ```json) or conversational text outside the JSON. Return only the valid JSON.
@@ -141,7 +153,11 @@ User: {user_message}
         if "chat_history" not in new_metadata:
             new_metadata["chat_history"] = []
         new_metadata["chat_history"].append({"role": "user", "content": user_message})
-        new_metadata["chat_history"].append({"role": "assistant", "content": chat_response})
+        new_metadata["chat_history"].append({
+            "role": "assistant", 
+            "content": chat_response,
+            "reasoning_trace": result_data.get("reasoning_trace")
+        })
         
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         log_entry = {

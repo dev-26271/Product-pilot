@@ -511,6 +511,97 @@ def render_chat_refinement(project: Dict[str, Any]) -> None:
             content = msg["content"]
             with st.chat_message(role):
                 st.markdown(content)
+                
+                # If Reasoning Trace is present in the assistant message, render it
+                trace = msg.get("reasoning_trace")
+                if trace and role == "assistant":
+                    with st.expander("🔍 Reasoning Trace", expanded=False):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("<p style='font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; color: #E5E7EB;'>Sources Consulted</p>", unsafe_allow_html=True)
+                            sources = trace.get("sources_consulted", [])
+                            # Support both list of strings or string
+                            if isinstance(sources, str):
+                                sources = [sources]
+                            for s in ["Business Analysis", "Product Requirements Document", "PRD", "User Stories", "Roadmap", "Jira Tasks", "Validation Report", "Intent Context"]:
+                                if s in sources or (s == "PRD" and "Product Requirements Document" in sources) or (s == "Product Requirements Document" and "PRD" in sources):
+                                    st.markdown(f"<span style='font-size: 0.82rem; color: #22C55E;'>✓ {s}</span>", unsafe_allow_html=True)
+                                    
+                            st.markdown("<p style='font-size: 0.85rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.25rem; color: #E5E7EB;'>Validation</p>", unsafe_allow_html=True)
+                            checks = trace.get("validation_checks", [])
+                            if isinstance(checks, str):
+                                checks = [checks]
+                            if checks:
+                                for check in checks:
+                                    st.markdown(f"<p style='font-size: 0.82rem; color: #9CA3AF; margin: 0;'>- {check}</p>", unsafe_allow_html=True)
+                            else:
+                                st.markdown("<p style='font-size: 0.82rem; color: #9CA3AF; margin: 0;'>No validation anomalies detected.</p>", unsafe_allow_html=True)
+                                
+                        with col2:
+                            st.markdown("<p style='font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; color: #E5E7EB;'>Entities Referenced</p>", unsafe_allow_html=True)
+                            entities = trace.get("entities_referenced", [])
+                            if isinstance(entities, str):
+                                entities = [entities]
+                            if entities:
+                                st.markdown(" ".join([f"`{e}`" for e in entities]))
+                            else:
+                                st.markdown("<span style='font-size: 0.82rem; color: #9CA3AF;'>None</span>", unsafe_allow_html=True)
+                                
+                            st.markdown("<p style='font-size: 0.85rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.25rem; color: #E5E7EB;'>Traceability Chain</p>", unsafe_allow_html=True)
+                            chain = trace.get("traceability_chain", [])
+                            if isinstance(chain, str):
+                                chain = [chain]
+                            if chain:
+                                for c in chain:
+                                    st.markdown(f"`{c}`")
+                            else:
+                                st.markdown("<span style='font-size: 0.82rem; color: #9CA3AF;'>None</span>", unsafe_allow_html=True)
+                            
+                            # Confidence display
+                            conf = trace.get("confidence", 0.95)
+                            # Handle string percentage or float
+                            if isinstance(conf, str):
+                                conf_val = conf
+                            else:
+                                if conf <= 1.0:
+                                    conf_val = f"{int(conf * 100)}%"
+                                else:
+                                    conf_val = f"{int(conf)}%"
+                            st.markdown(f"<p style='font-size: 0.85rem; font-weight: 600; margin-top: 0.75rem; color: #E5E7EB;'>Confidence: <span style='color:#3B82F6;'>{conf_val}</span></p>", unsafe_allow_html=True)
+                            
+                        # Optional fields for modifications
+                        has_mod_fields = any(trace.get(k) for k in ["affected_documents", "affected_entities", "estimated_changes", "validation_required", "recommended_action"])
+                        if has_mod_fields:
+                            st.markdown("<hr style='border-top: 1px solid #2D2D2D; margin: 0.75rem 0;'>", unsafe_allow_html=True)
+                            st.markdown("<p style='font-size: 0.85rem; font-weight: 600; color: #E5E7EB; margin-bottom: 0.5rem;'>📋 Modification Workspace Analysis</p>", unsafe_allow_html=True)
+                            
+                            col3, col4 = st.columns(2)
+                            with col3:
+                                docs = trace.get("affected_documents")
+                                if docs:
+                                    if isinstance(docs, str):
+                                        docs = [docs]
+                                    st.markdown(f"<p style='font-size: 0.82rem; color: #9CA3AF; margin: 0;'><strong>Affected Documents:</strong> {', '.join(docs)}</p>", unsafe_allow_html=True)
+                                    
+                                ents = trace.get("affected_entities")
+                                if ents:
+                                    if isinstance(ents, str):
+                                        ents = [ents]
+                                    st.markdown(f"<p style='font-size: 0.82rem; color: #9CA3AF; margin: 0;'><strong>Affected Entities:</strong> {', '.join([f'`{e}`' for e in ents])}</p>", unsafe_allow_html=True)
+                                    
+                                est = trace.get("estimated_changes")
+                                if est:
+                                    st.markdown(f"<p style='font-size: 0.82rem; color: #9CA3AF; margin: 0;'><strong>Estimated Changes:</strong> {est}</p>", unsafe_allow_html=True)
+                                    
+                            with col4:
+                                v_req = trace.get("validation_required")
+                                if v_req:
+                                    st.markdown(f"<p style='font-size: 0.82rem; color: #9CA3AF; margin: 0;'><strong>Validation Required:</strong> {v_req}</p>", unsafe_allow_html=True)
+                                    
+                                rec = trace.get("recommended_action")
+                                if rec:
+                                    st.markdown(f"<p style='font-size: 0.82rem; color: #9CA3AF; margin: 0;'><strong>Recommended Action:</strong> {rec}</p>", unsafe_allow_html=True)
 
     # 3. Render Pending Changes or Pending Approvals Summary if detected
     
