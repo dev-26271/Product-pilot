@@ -10,6 +10,9 @@ from backend.agent_registry import registry
 from backend.workspace_context import WorkspaceContext
 from backend.api import create_project
 
+# Force importing of agents package to trigger self-registration hooks
+import backend.agents
+
 logger = logging.getLogger(__name__)
 
 # Fast local keyword rules for metadata pre-parsing (latency-saving)
