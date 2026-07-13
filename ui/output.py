@@ -349,12 +349,16 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
         "User Stories", 
         "Roadmap", 
         "Jira Tasks", 
-        "Sprint Backlog"
+        "Sprint Backlog",
+        "Export Center"
     ]
     
     # 🟢 green circle indicator if generated, otherwise white text
     tab_titles = []
     for name in tab_names:
+        if name == "Export Center":
+            tab_titles.append("📤 Export Center")
+            continue
         full_name = get_full_name(name)
         if full_name in project.get('deliverables', {}):
             tab_titles.append(f"🟢 {name}")
@@ -365,6 +369,10 @@ def render_project_deliverables(project: Dict[str, Any]) -> None:
 
     for idx, tab_name in enumerate(tab_names):
         with tabs[idx]:
+            if tab_name == "Export Center":
+                render_export_center(project)
+                continue
+                
             map_name = get_full_name(tab_name)
             
             # Check if this deliverable has content compiled
@@ -1617,9 +1625,75 @@ def render_jira_entities(tasks: List[Dict[str, Any]]) -> None:
                         </ul>
                         <strong>Dependencies:</strong> {", ".join(task.get("dependencies", [])) or 'None'}<br>
                         <strong>Labels:</strong> {", ".join(task.get("labels", [])) or 'None'}<br>
-                        <strong>Implements:</strong> {", ".join(task.get("traceability", {}).get("implements", [])) or 'None'}
                     </div>
                 """, unsafe_allow_html=True)
+
+
+def render_export_center(project: Dict[str, Any]) -> None:
+    """Renders the Export Center interface to configure and download file exports."""
+    st.markdown("<h3 style='color: #F5F5F5; font-weight: 600; margin-bottom: 0.5rem;'>📤 Workspace Export Center</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 0.85rem; color: #9E9E9E; margin-bottom: 1.5rem;'>Export your generated specifications, roadmaps, stories, and tasks into high-quality formats without regenerating any workspace documents.</p>", unsafe_allow_html=True)
+    
+    # 1. Select Export Scope
+    scopes = [
+        "Entire Workspace",
+        "PRD",
+        "BRD",
+        "SRS",
+        "User Stories",
+        "Roadmap",
+        "Jira Tasks",
+        "Sprint Backlog",
+        "Executive Summary"
+    ]
+    scope_sel = st.selectbox("Select Export Scope", scopes, index=0)
+    
+    # 2. Select Export Format
+    formats = {
+        "PDF Document (.pdf)": "pdf",
+        "Word Document (.docx)": "docx",
+        "Markdown Text (.md)": "md",
+        "JSON Context Data (.json)": "json"
+    }
+    format_sel = st.selectbox("Select Export Format", list(formats.keys()), index=0)
+    fmt_key = formats[format_sel]
+    
+    st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+    
+    # 3. Export Action Button
+    from backend.export_service import ExportService
+    
+    # Pre-check if content is generated
+    scope_data = ExportService._resolve_scope_data(project, scope_sel)
+    if not scope_data:
+        st.warning(f"⚠️ Content for '{scope_sel}' is not yet generated. Please go to its respective tab to compile it first.")
+        return
+        
+    expected_path = ExportService.get_export_filepath(project.get("name", "Project"), scope_sel, fmt_key)
+    st.info(f"📂 **Export Destination:** `{expected_path}`")
+    
+    if st.button("Generate Export File", type="primary", use_container_width=True):
+        with st.spinner("Compiling and generating export file..."):
+            res = ExportService.export(project, scope_sel, fmt_key)
+            if res.get("status") == "success":
+                st.success(f"🎉 Export generated successfully!")
+                
+                # Load the binary/text data to feed into Streamlit download button
+                try:
+                    with open(res["location"], "rb") as f:
+                        btn_data = f.read()
+                        
+                    st.download_button(
+                        label=f"💾 Download {res['filename']}",
+                        data=btn_data,
+                        file_name=res["filename"],
+                        mime="application/octet-stream",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Failed to read generated export: {e}")
+            else:
+                st.error(f"Failed to export: {res.get('error')}")
 
 
 
