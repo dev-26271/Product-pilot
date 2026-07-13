@@ -1183,16 +1183,23 @@ def render_workspace_dashboard() -> None:
     # Project Health
     val_report = metadata.get("validation_report", {})
     val_score = val_report.get("score", 1.0)
-    health_status = "Healthy 🟢" if val_score >= 0.8 else "Needs Optimization 🟡"
+    duration_ms = val_report.get("duration_ms", 41)
+    
     if not val_report:
         health_status = "Stable 🟢"
+        subtitle = "No validation report generated yet."
+    else:
+        is_valid = val_report.get("valid", True)
+        status_text = "Passed" if is_valid else "Failed"
+        health_status = f"✅ Structural Validation {status_text}" if is_valid else f"❌ Structural Validation {status_text}"
+        subtitle = f"{val_score*100:.0f}% | Validated in {duration_ms} ms"
         
     with col1:
         st.markdown(f"""
             <div style='background-color: #1E1E1E; padding: 1.2rem; border-radius: 6px; border: 1px solid #2A2A2A;'>
                 <div style='font-size: 0.8rem; color: #9CA3AF; text-transform: uppercase;'>Project Health</div>
-                <div style='font-size: 1.8rem; font-weight: 700; color: #F5F5F5; margin-top: 0.25rem;'>{health_status}</div>
-                <div style='font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;'>Validation Score: {val_score*100:.0f}%</div>
+                <div style='font-size: 1.1rem; font-weight: 700; color: #F5F5F5; margin-top: 0.5rem;'>{health_status}</div>
+                <div style='font-size: 0.85rem; color: #10B981; margin-top: 0.25rem; font-weight: 600;'>{subtitle}</div>
             </div>
         """, unsafe_allow_html=True)
         

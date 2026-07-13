@@ -23,6 +23,16 @@ class ProductManagerAgent(BaseAgent):
         logger.info("Executing ProductManagerAgent...")
         start_time = time.perf_counter()
         
+        pm_timings = {
+            "Prompt construction": 0.0,
+            "RAG context preparation": 0.0,
+            "LLM invocation": 0.0,
+            "Response parsing": 0.0,
+            "JSON validation": 0.0,
+            "Markdown formatting": 0.0,
+            "Post-processing": 0.0,
+        }
+        
         from backend.profiler import PerformanceProfiler
         profiler = PerformanceProfiler.get_instance()
         
@@ -34,6 +44,7 @@ class ProductManagerAgent(BaseAgent):
         current_prd_draft = kwargs.get("current_prd_draft", {})
         
         # Step 1: Query RAG product database
+        t_rag_start = time.perf_counter()
         profiler.start_sub("RAG Loading & Search")
         problem = intent.get("problem_statement", "")
         features = " ".join(intent.get("core_features", []))
@@ -44,8 +55,10 @@ class ProductManagerAgent(BaseAgent):
         context_str = "\n\n".join([doc.page_content for doc in context_docs])
         logger.info(f"Retrieved {len(context_docs)} chunks from product index.")
         profiler.end_sub("RAG Loading & Search")
+        pm_timings["RAG context preparation"] = time.perf_counter() - t_rag_start
         
         # Step 2: Build user message
+        t_prompt_start = time.perf_counter()
         profiler.start_sub("Prompt Construction")
         user_message = f"""Product Context:
 {context_str}
@@ -87,15 +100,19 @@ Return only the complete updated JSON.
             ("user", user_message)
         ]
         profiler.end_sub("Prompt Construction")
+        pm_timings["Prompt construction"] = time.perf_counter() - t_prompt_start
         
+        t_llm_start = time.perf_counter()
         profiler.start_sub("LLM Invocation")
         raw_text = ""
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
             profiler.end_sub("LLM Invocation")
+            pm_timings["LLM invocation"] = time.perf_counter() - t_llm_start
             
             # Clean fences
+            t_parse_start = time.perf_counter()
             profiler.start_sub("Response Parsing")
             if raw_text.startswith("```"):
                 lines = raw_text.splitlines()
@@ -107,7 +124,11 @@ Return only the complete updated JSON.
                 
             pm_json = json.loads(raw_text)
             profiler.end_sub("Response Parsing")
+            pm_timings["Response parsing"] = time.perf_counter() - t_parse_start
         except Exception as e:
+            if "LLM invocation" not in pm_timings or pm_timings["LLM invocation"] == 0:
+                pm_timings["LLM invocation"] = time.perf_counter() - t_llm_start
+            t_parse_start = time.perf_counter()
             profiler.end_sub("LLM Invocation")
             profiler.end_sub("Response Parsing")
             logger.error(f"Product Manager LLM invoke or parse failed: {e}")
@@ -184,9 +205,11 @@ Return only the complete updated JSON.
                     "Success_Metrics": ["System uptime > 99.9%", "User CSAT > 90%"],
                     "Open_Questions": ["Third-party API integration scope"]
                 }
+            pm_timings["Response parsing"] = time.perf_counter() - t_parse_start
  
                 
         # Validate critical keys
+        t_val_start = time.perf_counter()
         profiler.start_sub("Validation Audits")
         required_keys = ["Executive_Summary", "Functional_Requirements", "Core_Features", "Success_Metrics"]
         for key in required_keys:
@@ -208,7 +231,9 @@ Return only the complete updated JSON.
         # --- Validate canonical entities ---
         _log_entity_warnings(pm_json)
         profiler.end_sub("Validation Audits")
+        pm_timings["JSON validation"] = time.perf_counter() - t_val_start
         
+        t_fmt_start = time.perf_counter()
         profiler.start_sub("Formatting & Markdown")
 
         # 1. Executive Summary — handle both new dict format and legacy string
@@ -369,7 +394,10 @@ Return only the complete updated JSON.
             prd_content["\u26a0\ufe0f Risk Factors"] = "See Risk Factors in the Executive Summary and individual Functional Requirements above."
  
         prd_content = {k: str(v) for k, v in prd_content.items() if v and (str(v).strip() if isinstance(v, str) else True)}
+        profiler.end_sub("Formatting & Markdown")
+        pm_timings["Markdown formatting"] = time.perf_counter() - t_fmt_start
  
+        t_post_start = time.perf_counter()
         res_ctx = context.clone(
             prd=pm_json,
             deliverables={
@@ -383,7 +411,19 @@ Return only the complete updated JSON.
                 }
             }
         ).add_agent_log(log_entry)
-        profiler.end_sub("Formatting & Markdown")
+        pm_timings["Post-processing"] = time.perf_counter() - t_post_start
+
+        # Print Timing Report
+        print("\nProduct Manager")
+        print("---------------")
+        print(f"Prompt Construction .... {pm_timings['Prompt construction']:.2f} s")
+        print(f"RAG Context Prep ....... {pm_timings['RAG context preparation']:.2f} s")
+        print(f"LLM Invocation ......... {pm_timings['LLM invocation']:.2f} s")
+        print(f"Response Parsing ....... {pm_timings['Response parsing']:.2f} s")
+        print(f"JSON Validation ........ {pm_timings['JSON validation']:.2f} s")
+        print(f"Markdown Formatting .... {pm_timings['Markdown formatting']:.2f} s")
+        print(f"Post-processing ........ {pm_timings['Post-processing']:.2f} s\n")
+
         return res_ctx
 
 # Auto-register agent

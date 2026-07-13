@@ -15,6 +15,8 @@ import backend.agents
 
 logger = logging.getLogger(__name__)
 
+ENABLE_SEMANTIC_VALIDATION = False
+
 # Fast local keyword rules for metadata pre-parsing (latency-saving)
 INDUSTRY_PATTERNS = {
     "Healthcare": r"\b(health|medical|clinic|doctor|patient|hospital|nurse|pharmacy|clinical|telemed)\b",
@@ -269,39 +271,40 @@ class PythonLocalStrategy(OrchestrationStrategy):
         context = pm_agent.execute(context)
         profiler.end("Product Manager")
         
-        # 5. Step 4: Validation & PM Self-Repair Loop
-        val_agent = registry.get("validation_agent")
+        # 5. Step 4: Deterministic Python Validation & Optional Semantic Audit
+        from backend.validation.validator import DeterministicValidator
+        validator = DeterministicValidator()
         
-        # Maximum repair loops: 2 attempts
-        validation_total = 0.0
-        repair_total = 0.0
-        max_attempts = 2
-        for attempt in range(max_attempts + 1):
-            t_val_start = time.perf_counter()
+        t_val_start = time.perf_counter()
+        profiler.start_sub("Validation Audits")
+        val_report = validator.validate(context)
+        profiler.end_sub("Validation Audits")
+        
+        # Auto-fix simple issues if score < 0.95
+        repair_duration = 0.0
+        if val_report.get("score", 1.0) < 0.95 and val_report.get("repair_actions"):
+            logger.info(f"PRD score ({val_report.get('score')}) below threshold 0.95. Executing python auto-fixes: {val_report.get('repair_actions')}")
+            t_repair_start = time.perf_counter()
+            context = validator.auto_fix(context, val_report["repair_actions"])
+            repair_duration = time.perf_counter() - t_repair_start
+            
+            # Re-run validator
+            val_report = validator.validate(context)
+            logger.info(f"Validator re-run score after auto-fixes: {val_report.get('score')}")
+            
+        context.metadata["validation_report"] = val_report
+        validation_duration = time.perf_counter() - t_val_start
+        
+        # Optional Semantic Validation Agent (default False)
+        if ENABLE_SEMANTIC_VALIDATION:
+            val_agent = registry.get("semantic_validation_agent")
+            t_sem_start = time.perf_counter()
             context = val_agent.execute(context)
-            validation_total += (time.perf_counter() - t_val_start)
+            validation_duration += (time.perf_counter() - t_sem_start)
+            val_report = context.metadata.get("validation_report", val_report)
             
-            val_report = context.metadata.get("validation_report", {})
-            
-            if val_report.get("valid", True):
-                logger.info(f"PRD passed validation agent successfully on attempt {attempt + 1} ✓ (Score: {val_report.get('score', 1.0)})")
-                break
-            else:
-                logger.warning(f"PRD failed validation check on attempt {attempt + 1}. Score: {val_report.get('score', 0.0)}")
-                if attempt < max_attempts:
-                    logger.info("Triggering PM self-repair step...")
-                    t_repair_start = time.perf_counter()
-                    context = pm_agent.execute(
-                        context,
-                        repair_feedback=val_report.get("repair_prompt", ""),
-                        current_prd_draft=context.prd
-                    )
-                    repair_total += (time.perf_counter() - t_repair_start)
-                else:
-                    logger.warning("Max PM self-repair loop attempts reached. Proceeding with current PRD.")
-        
-        profiler.set_duration("Validation", validation_total)
-        profiler.set_duration("Repair Loop", repair_total)
+        profiler.set_duration("Validation", validation_duration)
+        profiler.set_duration("Repair Loop", repair_duration)
                # Build and update entity_graph in context metadata
         from backend.agents.traceability_engine import TraceabilityEngine
         profiler.start("Traceability Graph")

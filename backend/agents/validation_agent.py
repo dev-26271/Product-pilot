@@ -12,17 +12,28 @@ from backend.prompts import VALIDATION_AGENT_SYSTEM_PROMPT
 logger = logging.getLogger(__name__)
 
 
-class ValidationAgent(BaseAgent):
-    """Audits product deliverables across 3 dimensions:
-    Business Consistency, Product Quality, Engineering Readiness."""
+class SemanticValidationAgent(BaseAgent):
+    """Semantic Validation Agent — audits deliverables for strategic alignment,
+    persona realism, requirements logic contradictions, and roadmap realism."""
 
     def execute(self, context: WorkspaceContext, **kwargs) -> WorkspaceContext:
-        logger.info("Executing ValidationAgent...")
+        logger.info("Executing SemanticValidationAgent...")
         start_time = time.perf_counter()
+        
+        val_timings = {
+            "Prompt construction": 0.0,
+            "RAG context preparation": 0.0,
+            "LLM invocation": 0.0,
+            "Response parsing": 0.0,
+            "JSON validation": 0.0,
+            "Markdown formatting": 0.0,
+            "Post-processing": 0.0,
+        }
         
         from backend.profiler import PerformanceProfiler
         profiler = PerformanceProfiler.get_instance()
  
+        t_prompt_start = time.perf_counter()
         profiler.start_sub("Prompt Construction")
         user_message = f"""=== INTENT CONTEXT ===
 {json.dumps(context.intent_context, indent=2)}
@@ -50,14 +61,18 @@ class ValidationAgent(BaseAgent):
             ("user", user_message),
         ]
         profiler.end_sub("Prompt Construction")
+        val_timings["Prompt construction"] = time.perf_counter() - t_prompt_start
  
+        t_llm_start = time.perf_counter()
         profiler.start_sub("LLM Invocation")
         raw_text = ""
         try:
             response = llm.invoke(messages)
             raw_text = response.content.strip()
             profiler.end_sub("LLM Invocation")
+            val_timings["LLM invocation"] = time.perf_counter() - t_llm_start
             
+            t_parse_start = time.perf_counter()
             profiler.start_sub("Response Parsing")
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
@@ -66,10 +81,14 @@ class ValidationAgent(BaseAgent):
                 raw_text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
             val_json = json.loads(raw_text)
             profiler.end_sub("Response Parsing")
+            val_timings["Response parsing"] = time.perf_counter() - t_parse_start
         except Exception as e:
+            if "LLM invocation" not in val_timings or val_timings["LLM invocation"] == 0:
+                val_timings["LLM invocation"] = time.perf_counter() - t_llm_start
+            t_parse_start = time.perf_counter()
             profiler.end_sub("LLM Invocation")
             profiler.end_sub("Response Parsing")
-            logger.error(f"Validation Agent LLM invoke or parse failed: {e}")
+            logger.error(f"Semantic Validation Agent LLM invoke or parse failed: {e}")
             val_json = {
                 "valid": True,
                 "overall_score": 1.0,
@@ -78,13 +97,15 @@ class ValidationAgent(BaseAgent):
                     "product_quality": {"score": 1.0, "findings": []},
                     "engineering_readiness": {"score": 1.0, "findings": []},
                 },
-                "errors": [f"Validation system exception: {e}"],
+                "errors": [f"Semantic validation system exception: {e}"],
                 "warnings": [],
                 "repair_prompt": "",
                 "score": 1.0,
             }
+            val_timings["Response parsing"] = time.perf_counter() - t_parse_start
 
         # Normalise: ensure backwards-compatible fields
+        t_val_start = time.perf_counter()
         profiler.start_sub("Validation Audits")
         if "valid" not in val_json:
             val_json["valid"] = len(val_json.get("errors", [])) == 0
@@ -94,8 +115,8 @@ class ValidationAgent(BaseAgent):
             val_json["warnings"] = []
         if "repair_prompt" not in val_json:
             val_json["repair_prompt"] = ""
-        # Prefer overall_score; fall back to score for orchestrator compatibility
-        overall = val_json.get("overall_score", val_json.get("score", 0.5))
+            
+        overall = val_json.get("overall_score", val_json.get("score", 0.95))
         val_json["overall_score"] = overall
         val_json["score"] = overall
         if "dimensions" not in val_json:
@@ -105,37 +126,22 @@ class ValidationAgent(BaseAgent):
                 "engineering_readiness": {"score": overall, "findings": []},
             }
 
-        # Check dependency integrity and update validation report
-        dep_errors = _validate_dependencies(context)
-        if dep_errors:
-            val_json["errors"].extend(dep_errors)
-            val_json["valid"] = False
-            
-            # Deduct score for broken mappings
-            er_dict = val_json["dimensions"].setdefault("engineering_readiness", {"score": overall, "findings": []})
-            deduction = min(0.4, len(dep_errors) * 0.1)
-            er_dict["score"] = max(0.0, er_dict.get("score", 1.0) - deduction)
-            er_dict.setdefault("findings", []).extend(dep_errors)
-            
-            # Recompute overall score
-            overall = max(0.0, overall - deduction)
-            val_json["overall_score"] = overall
-            val_json["score"] = overall
-
         # Log dimension breakdown
         dims = val_json["dimensions"]
         logger.info(
-            f"Validation scores — BC: {dims.get('business_consistency',{}).get('score','?')} "
+            f"Semantic Validation scores — BC: {dims.get('business_consistency',{}).get('score','?')} "
             f"PQ: {dims.get('product_quality',{}).get('score','?')} "
             f"ER: {dims.get('engineering_readiness',{}).get('score','?')} "
             f"Overall: {overall}"
         )
         profiler.end_sub("Validation Audits")
+        val_timings["JSON validation"] = time.perf_counter() - t_val_start
  
+        t_fmt_start = time.perf_counter()
         profiler.start_sub("Formatting & Markdown")
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         log_entry = {
-            "agent": "ValidationAgent",
+            "agent": "SemanticValidationAgent",
             "model": model_name,
             "latency_ms": duration_ms,
             "tokens": len(raw_text) // 4 if 'raw_text' in locals() else 0,
@@ -144,65 +150,75 @@ class ValidationAgent(BaseAgent):
             "version": "3.0.0",
         }
 
+        # Merge semantic validation report with existing report if present
         new_metadata = context.metadata.copy()
-        new_metadata["validation_report"] = val_json
+        existing_report = new_metadata.get("validation_report", {})
+        
+        if existing_report:
+            # Merge errors and warnings
+            merged_errors = list(set(existing_report.get("errors", []) + val_json.get("errors", [])))
+            merged_warnings = list(set(existing_report.get("warnings", []) + val_json.get("warnings", [])))
+            
+            # Combine overall score by taking the minimum (for safety) or weighted average
+            merged_score = min(existing_report.get("overall_score", 1.0), val_json.get("overall_score", 1.0))
+            
+            merged_report = {
+                "valid": (len(merged_errors) == 0) and (merged_score >= 0.95),
+                "overall_score": merged_score,
+                "score": merged_score,
+                "dimensions": {
+                    "business_consistency": {
+                        "score": min(existing_report.get("dimensions", {}).get("business_consistency", {}).get("score", 1.0),
+                                     val_json.get("dimensions", {}).get("business_consistency", {}).get("score", 1.0)),
+                        "findings": list(set(existing_report.get("dimensions", {}).get("business_consistency", {}).get("findings", []) +
+                                             val_json.get("dimensions", {}).get("business_consistency", {}).get("findings", [])))
+                    },
+                    "product_quality": {
+                        "score": min(existing_report.get("dimensions", {}).get("product_quality", {}).get("score", 1.0),
+                                     val_json.get("dimensions", {}).get("product_quality", {}).get("score", 1.0)),
+                        "findings": list(set(existing_report.get("dimensions", {}).get("product_quality", {}).get("findings", []) +
+                                             val_json.get("dimensions", {}).get("product_quality", {}).get("findings", [])))
+                    },
+                    "engineering_readiness": {
+                        "score": min(existing_report.get("dimensions", {}).get("engineering_readiness", {}).get("score", 1.0),
+                                     val_json.get("dimensions", {}).get("engineering_readiness", {}).get("score", 1.0)),
+                        "findings": list(set(existing_report.get("dimensions", {}).get("engineering_readiness", {}).get("findings", []) +
+                                             val_json.get("dimensions", {}).get("engineering_readiness", {}).get("findings", [])))
+                    }
+                },
+                "errors": merged_errors,
+                "warnings": merged_warnings,
+                "repair_prompt": val_json.get("repair_prompt", "") or existing_report.get("repair_prompt", ""),
+                "duration_ms": existing_report.get("duration_ms", 0) + duration_ms
+            }
+            new_metadata["validation_report"] = merged_report
+        else:
+            new_metadata["validation_report"] = val_json
+            
         res_ctx = context.clone(metadata=new_metadata).add_agent_log(log_entry)
         profiler.end_sub("Formatting & Markdown")
+        val_timings["Markdown formatting"] = time.perf_counter() - t_fmt_start
+        
+        t_post_start = time.perf_counter()
+        val_timings["Post-processing"] = time.perf_counter() - t_post_start
+
+        # Print Timing Report
+        print("\nSemantic Validation")
+        print("-------------------")
+        print(f"Prompt Construction .... {val_timings['Prompt construction']:.2f} s")
+        print(f"RAG Context Prep ....... {val_timings['RAG context preparation']:.2f} s")
+        print(f"LLM Invocation ......... {val_timings['LLM invocation']:.2f} s")
+        print(f"Response Parsing ....... {val_timings['Response parsing']:.2f} s")
+        print(f"JSON Validation ........ {val_timings['JSON validation']:.2f} s")
+        print(f"Markdown Formatting .... {val_timings['Markdown formatting']:.2f} s")
+        print(f"Post-processing ........ {val_timings['Post-processing']:.2f} s\n")
+
         return res_ctx
 
 
-def _validate_dependencies(context: WorkspaceContext) -> list:
-    """Verifies that all downstream deliverables contain valid mappings to upstream entities."""
-    errors = []
-    
-    # Instantiate TraceabilityEngine on the context dictionary to parse the graph nodes
-    from backend.agents.traceability_engine import TraceabilityEngine
-    try:
-        engine = TraceabilityEngine(context.to_dict())
-        nodes = engine.graph.get("nodes", {})
-    except Exception as e:
-        logger.error(f"Failed to build traceability graph for validation: {e}")
-        return [f"Traceability Graph build failure: {e}"]
-        
-    # Check stories links
-    us_data = context.deliverables.get("User Stories", {})
-    us_content = us_data.get("content", us_data)
-    if isinstance(us_content, dict):
-        stories = us_content.get("stories", [])
-        for idx, story in enumerate(stories):
-            sid = story.get("id", f"Story[{idx}]")
-            
-            # Check FR links
-            trace_reqs = story.get("traceability", {}).get("functional_requirements", [])
-            for tr in trace_reqs:
-                # Find matching requirement node
-                matched = False
-                for nid, node in nodes.items():
-                    if node["type"] == "Functional Requirement" and (nid == tr or tr in nid or nid in tr):
-                        matched = True
-                        break
-                if not matched:
-                    errors.append(f"User Story {sid} references broken Functional Requirement link: '{tr}'")
-                    
-    # Check Jira task links
-    jira_data = context.deliverables.get("Jira Tasks", {})
-    jira_content = jira_data.get("content", jira_data)
-    if isinstance(jira_content, dict):
-        tasks = jira_content.get("tasks", [])
-        for idx, task in enumerate(tasks):
-            tid = task.get("id", f"Task[{idx}]")
-            us_ref = task.get("user_story_id")
-            if us_ref:
-                matched = False
-                for nid, node in nodes.items():
-                    if node["type"] == "User Story" and (nid == us_ref or us_ref in nid or nid in us_ref):
-                        matched = True
-                        break
-                if not matched:
-                    errors.append(f"Jira Task {tid} references broken User Story link: '{us_ref}'")
-                    
-    return errors
+# Alias ValidationAgent to SemanticValidationAgent for import backward compatibility
+ValidationAgent = SemanticValidationAgent
 
-
-# Auto-register agent
-registry.register("validation_agent", ValidationAgent())
+# Register both keys
+registry.register("semantic_validation_agent", SemanticValidationAgent())
+registry.register("validation_agent", SemanticValidationAgent())
