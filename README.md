@@ -25,9 +25,40 @@ The platform combines **multi-agent orchestration**, **Retrieval-Augmented Gener
 The following diagram illustrates the end-to-end execution pipeline used by ProductPilot, from user input through multi-agent orchestration and document generation.
 
 ```mermaid
-YOUR MAIN FLOWCHART HERE
-```
+flowchart LR
 
+    U([👤 User])
+
+    U --> UI["🖥️ Streamlit Workspace"]
+
+    UI --> O["⚙️ ProductPilot Orchestrator"]
+
+    O --> IE["🎯 Intent Extraction"]
+    IE --> BA["📊 Business Analyst"]
+    BA --> PM["📝 Product Manager"]
+    PM --> DV["✅ Deterministic Validation"]
+
+    DV --> WS["📁 Workspace"]
+
+    WS --> PRD["📄 PRD"]
+    WS --> BRD["📋 Business Analysis"]
+    WS --> US["👥 User Stories"]
+    WS --> RM["🗺️ Roadmap"]
+    WS --> JR["🎫 Jira Tasks"]
+    WS --> SB["🏃 Sprint Backlog"]
+
+    WS --> CHAT["💬 Ask ProductPilot"]
+
+    CHAT --> LLM["🧠 Groq API"]
+
+    LLM -->|Success| CHAT
+    LLM -->|429 Rate Limit| RETRY["🔄 Exponential Backoff"]
+
+    RETRY --> LLM
+    RETRY -->|Retries Exhausted| FALLBACK["🛡️ Safe Fallback"]
+
+    FALLBACK --> CHAT
+```
 ---
 
 # Knowledge Grounding Pipeline
