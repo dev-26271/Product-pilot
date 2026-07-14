@@ -238,6 +238,9 @@ ProductPilot/
 └── README.md
 ```
 ---
+Current Status
+
+ProductPilot is currently a local prototype under active development. The project demonstrates the architecture, multi-agent orchestration, Retrieval-Augmented Generation (RAG), and engineering optimizations. Cloud deployment and multi-user support are planned for a future release.
 
 # License
 
