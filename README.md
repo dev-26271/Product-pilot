@@ -6,6 +6,25 @@ ProductPilot streamlines the early stages of product development by converting n
 
 The platform combines **multi-agent orchestration**, **Retrieval-Augmented Generation (RAG)**, and **deterministic validation** to produce structured, consistent, and context-aware outputs.
 
+```mermaid
+flowchart LR
+
+    IDEA["💡 Product Idea"]
+
+    IDEA --> METADATA["🏷️ Metadata Detection"]
+
+    METADATA --> INTENT["🎯 Intent Extraction"]
+
+    INTENT --> BA["📊 Business Analysis"]
+
+    BA --> PM["📝 PRD Generation"]
+
+    PM --> VALIDATE["✅ Validation"]
+
+    VALIDATE --> WORKSPACE["📁 Workspace"]
+
+    WORKSPACE --> DOCS["📚 Documents Ready"]
+```
 ---
 
 ## ✨ Key Features
@@ -66,7 +85,28 @@ flowchart LR
 ProductPilot combines project-specific knowledge with a shared knowledge base to ensure generated requirements remain context-aware while preventing cross-project contamination.
 
 ```mermaid
-YOUR RAG FLOWCHART HERE
+flowchart TD
+
+    IDEA["💡 Product Idea"]
+
+    IDEA --> QUERY["🔍 Query Builder"]
+
+    QUERY --> GLOBAL["📚 Global Knowledge Base"]
+
+    QUERY --> PROJECT["📁 Project Knowledge Base"]
+
+    GLOBAL --> MERGE["🔗 Merge Context"]
+    PROJECT --> MERGE
+
+    MERGE --> SEARCH["⚡ FAISS Similarity Search"]
+
+    SEARCH --> RERANK["📈 Semantic Reranking"]
+
+    RERANK --> CONTEXT["📝 Grounding Context"]
+
+    CONTEXT --> PM["🤖 Product Manager Agent"]
+
+    PM --> OUTPUT["📄 Generated Documents"]
 ```
 
 ---
@@ -76,7 +116,23 @@ YOUR RAG FLOWCHART HERE
 Rather than regenerating an entire workspace after every edit, ProductPilot selectively updates only the affected documents. This significantly reduces latency and improves consistency across generated artifacts.
 
 ```mermaid
-YOUR INCREMENTAL REFINEMENT FLOWCHART HERE
+flowchart LR
+
+    USER["✏️ User Edit"]
+
+    USER --> DETECT["🔍 Intent Detection"]
+
+    DETECT --> ANALYZE["📊 Dependency Analysis"]
+
+    ANALYZE --> TARGET["🎯 Affected Documents"]
+
+    TARGET --> REFINE["🤖 Incremental Refiner"]
+
+    REFINE --> VALIDATE["✅ Validation"]
+
+    VALIDATE --> UPDATE["📁 Workspace Updated"]
+
+    UPDATE --> CHAT["💬 ProductPilot Copilot"]
 ```
 
 ---
@@ -156,20 +212,30 @@ streamlit run app.py
 
 ---
 
-# Project Structure
+## 📂 Project Structure
 
-```
-text
-backend/
+```text
+ProductPilot/
 │
-├── agents/
-├── validation/
-├── orchestrator.py
-└── prompts.py
-knowledge_base/
-rag/
-ui/
-app.py
+├── backend/
+│   ├── agents/              # AI agents
+│   ├── validation/          # Deterministic validation engine
+│   ├── orchestrator.py      # Multi-agent pipeline
+│   └── prompts.py           # System prompts
+│
+├── knowledge_base/          # Shared & project-specific knowledge
+│
+├── rag/                     # FAISS vector stores & retrieval
+│
+├── ui/                      # Streamlit interface
+│
+├── exports/                 # Exported workspaces
+│
+├── app.py                   # Application entry point
+│
+├── requirements.txt
+│
+└── README.md
 ```
 ---
 
