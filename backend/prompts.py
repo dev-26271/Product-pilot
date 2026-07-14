@@ -223,20 +223,20 @@ You MUST respond ONLY with a raw JSON object matching the following PRD output s
 
 interface PRD {
   Executive_Summary: {
-    problem: string; // problem description
-    opportunity: string; // market opportunity
-    market: string; // target market
-    strategy: string; // strategy
-    kpis: string[]; // KPIs
-    timeline: string; // milestones
-    risks: string[]; // risks
-    investment_summary: string; // investments
+    problem: string;
+    opportunity: string;
+    market: string;
+    strategy: string;
+    kpis: string[];
+    timeline: string;
+    risks: string[];
+    investment_summary: string;
   };
-  Product_Vision: string; // long-term vision
-  Problem_Statement: string; // description
-  Goals_and_Objectives: string[]; // SMART goals
+  Product_Vision: string;
+  Problem_Statement: string;
+  Goals_and_Objectives: string[];
   User_Personas: {
-    id: string; // PE-XXX
+    id: string;
     name: string;
     role: string;
     goals: string[];
@@ -246,31 +246,31 @@ interface PRD {
     daily_workflow: string;
   }[];
   Functional_Requirements: {
-    id: string; // FR-XXX
+    id: string;
     title: string;
     description: string;
     priority: "High" | "Medium" | "Low";
-    business_value: string; // BG-XXX
-    user_persona: string; // PE-XXX
-    acceptance_criteria: string[]; // Given/When/Then
-    success_metrics: string[]; // User-centric success metrics
+    business_value: string;
+    user_persona: string;
+    acceptance_criteria: string[];
+    success_metrics: string[];
     kpis: string[];
-    dependencies: string[]; // FR-XXX
+    dependencies: string[];
     risks: string;
     assumptions: string[];
-    edge_cases: string[]; // Document edge cases explicitly
+    edge_cases: string[];
     non_functional_requirements: {
-      performance: string; // numeric target
+      performance: string;
       security: string;
       scalability: string;
     };
     version: "1.0";
     status: "Draft" | "Active";
     confidence: number;
-    priority_score: number; // 1-10
-    risk_score: number; // 1-10
+    priority_score: number;
+    risk_score: number;
     ownership: { agent: "ProductManagerAgent"; created_at: string; last_modified_by: "ProductManagerAgent" };
-    source_attribution: string[]; // BG-XXX
+    source_attribution: string[];
     traceability: { implements: string[]; verifies: string[]; tested_by: string[] };
     relationships: { type: "implements" | "depends_on"; target_id: string }[];
   }[];
@@ -284,16 +284,16 @@ interface PRD {
     Availability: string;
   };
   Core_Features: {
-    id: string; // FT-XXX
+    id: string;
     name: string;
     description: string;
-    business_value: string; // BG-XXX
-    functional_requirement_ids: string[]; // FR-XXX
-    user_persona: string; // PE-XXX
-    acceptance_criteria: string[]; // Given/When/Then
-    success_metrics: string[]; // User-centric success metrics
+    business_value: string;
+    functional_requirement_ids: string[];
+    user_persona: string;
+    acceptance_criteria: string[];
+    success_metrics: string[];
     kpis: string[];
-    dependencies: string[]; // FT-XXX
+    dependencies: string[];
     risks: string;
     assumptions: string[];
     edge_cases: string[];
@@ -301,10 +301,10 @@ interface PRD {
     version: "1.0";
     status: "Draft";
     confidence: number;
-    priority_score: number; // 1-10
-    risk_score: number; // 1-10
+    priority_score: number;
+    risk_score: number;
     ownership: { agent: "ProductManagerAgent"; created_at: string; last_modified_by: "ProductManagerAgent" };
-    source_attribution: string[]; // BG-XXX
+    source_attribution: string[];
     traceability: { implements: string[]; realized_by: string[]; owned_by: string };
     relationships: { type: "implements" | "depends_on"; target_id: string }[];
   }[];

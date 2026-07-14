@@ -6,7 +6,7 @@ from typing import Dict, Any, List
 
 from backend.agent_registry import BaseAgent, registry
 from backend.workspace_context import WorkspaceContext
-from backend.llm import get_llm
+from backend.llm import get_llm, strip_metadata_for_llm
 from backend.prompts import DOCUMENT_REFINER_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ class DocumentRefinerAgent(BaseAgent):
                 user_message = f"""Document: {document_name}
 Section: {key_to_use}
 Current Content:
-{json.dumps(section_text, indent=2) if isinstance(section_text, (dict, list)) else str(section_text)}
+{json.dumps(strip_metadata_for_llm(section_text), indent=2) if isinstance(section_text, (dict, list)) else str(section_text)}
 
 Refinement Instruction:
 {instruction}
@@ -135,12 +135,12 @@ Refinement Instruction:
         else:
             # Fallback to full document refinement if content is flat string
             user_message = f"""=== INTENT CONTEXT ===
-{json.dumps(context.intent_context, indent=2)}
+{json.dumps(strip_metadata_for_llm(context.intent_context), indent=2)}
 
 === DOCUMENT DETAILS ===
 Document: {document_name}
 Current Content:
-{current_content}
+{json.dumps(strip_metadata_for_llm(current_content), indent=2) if isinstance(current_content, (dict, list)) else str(current_content)}
 
 Refinement Instruction:
 {instruction}

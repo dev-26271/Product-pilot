@@ -11,7 +11,8 @@ from backend.validation.rules import (
     check_acceptance_criteria_format,
     check_story_points_fibonacci,
     check_traceability_links,
-    check_measurable_nfrs
+    check_measurable_nfrs,
+    check_domain_rules
 )
 
 class DeterministicValidator:
@@ -59,6 +60,9 @@ class DeterministicValidator:
         
         nfr_warnings = check_measurable_nfrs(context)
         warnings.extend(nfr_warnings)
+        
+        domain_errors = check_domain_rules(context)
+        errors.extend(domain_errors)
 
         # 2. Compute dimensional scoring
         bc_errors = [e for e in errors if any(k in e for k in ["Goal", "Persona"])]

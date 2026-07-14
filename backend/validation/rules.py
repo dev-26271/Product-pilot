@@ -317,3 +317,29 @@ def check_measurable_nfrs(context: WorkspaceContext) -> List[str]:
                 warnings.append(f"Non-Functional Requirement '{k}' ('{v}') does not contain measurable numeric metrics.")
                 
     return warnings
+
+def check_domain_rules(context: WorkspaceContext) -> List[str]:
+    """Validates domain-specific constraints in the PRD and Business Analysis."""
+    errors = []
+    
+    from backend.domains import detect_domain
+    domain = detect_domain(context.idea, context.intent_context)
+    
+    # Extract text content from the whole PRD for keyword checks
+    prd_str = str(context.prd).lower()
+    
+    if domain == "Physical Consumer Product":
+        # A towel should never require TLS encryption or DB/API.
+        software_keywords = ["tls", "ssl", "encryption", "database", "api", "oauth", "jwt", "https", "concurrent users"]
+        for kw in software_keywords:
+            if re.search(r'\b' + re.escape(kw) + r'\b', prd_str):
+                errors.append(f"Physical Product contains software-specific requirement: '{kw}'.")
+                
+    elif domain in ["SaaS Platform", "Mobile Application", "Website", "Enterprise Software"]:
+        # A SaaS should never require manufacturing tolerances.
+        physical_keywords = ["manufacturing tolerances", "manufacturing requirements", "wash cycles", "packaging integrity", "shelf life", "drop-test"]
+        for kw in physical_keywords:
+            if re.search(r'\b' + re.escape(kw) + r'\b', prd_str):
+                errors.append(f"Software product contains physical product requirement: '{kw}'.")
+                
+    return errors

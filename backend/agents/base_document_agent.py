@@ -7,7 +7,7 @@ from typing import Dict, Any, List
 
 from backend.agent_registry import BaseAgent
 from backend.workspace_context import WorkspaceContext
-from backend.llm import get_llm
+from backend.llm import get_llm, strip_metadata_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -57,21 +57,21 @@ class BaseDocumentAgent(BaseAgent):
         """Standardized user context injection prompt."""
         sections = []
         sections.append("=== INTENT CONTEXT (Canonical Source of Truth) ===")
-        sections.append(json.dumps(context.intent_context, indent=2))
+        sections.append(json.dumps(strip_metadata_for_llm(context.intent_context), indent=2))
         
         if "business_analysis" in self.required_inputs:
             sections.append("=== BUSINESS ANALYSIS ===")
-            sections.append(json.dumps(context.business_analysis, indent=2))
+            sections.append(json.dumps(strip_metadata_for_llm(context.business_analysis), indent=2))
             
         if "prd" in self.required_inputs:
             sections.append("=== PRODUCT REQUIREMENTS DOCUMENT ===")
-            sections.append(json.dumps(context.prd, indent=2))
+            sections.append(json.dumps(strip_metadata_for_llm(context.prd), indent=2))
             
         # Add dependent deliverables if any are required
         for req in self.required_inputs:
             if req not in ["prd", "business_analysis", "intent_context", "idea"]:
                 sections.append(f"=== DEPENDENT DELIVERABLE: {req} ===")
-                sections.append(json.dumps(context.deliverables.get(req, {}), indent=2))
+                sections.append(json.dumps(strip_metadata_for_llm(context.deliverables.get(req, {})), indent=2))
                 
         return "\n\n".join(sections)
 

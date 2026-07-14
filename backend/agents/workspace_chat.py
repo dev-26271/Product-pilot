@@ -6,7 +6,7 @@ from typing import Dict, Any, List
 
 from backend.agent_registry import BaseAgent, registry
 from backend.workspace_context import WorkspaceContext
-from backend.llm import get_llm
+from backend.llm import get_llm, strip_metadata_for_llm
 from backend.agents.dependency_analyzer import DependencyAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -290,21 +290,78 @@ class WorkspaceChatAgent(BaseAgent):
             }
             return context.clone(metadata=new_metadata).add_agent_log(log_entry)
         
+        # Deterministically handle common informational queries to avoid LLM calls
+        msg_lower_clean = msg_lower.strip()
+        is_informational = not any(w in msg_lower_clean for w in ["add", "remove", "delete", "edit", "change", "modify", "update", "create", "refine", "new"])
+        
+        if is_informational:
+            matched_fallback = None
+            if any(w in msg_lower_clean for w in ["primary user", "persona", "who is", "who are"]):
+                matched_fallback = "persona"
+            elif "roadmap" in msg_lower_clean and any(w in msg_lower_clean for w in ["explain", "describe", "what is"]):
+                matched_fallback = "roadmap"
+            elif any(w in msg_lower_clean for w in ["cost", "estimate", "budget", "pricing"]):
+                matched_fallback = "cost"
+            elif "risk" in msg_lower_clean and any(w in msg_lower_clean for w in ["what", "analyze", "list", "show"]):
+                matched_fallback = "risk"
+            elif any(w in msg_lower_clean for w in ["summarize", "summary", "explain this project"]):
+                matched_fallback = "project"
+            elif any(w in msg_lower_clean for w in ["reduce", "mvp scope", "scope reduction"]):
+                matched_fallback = "scope"
+                
+            if matched_fallback:
+                logger.info(f"Deterministic query resolution triggered for: '{matched_fallback}'")
+                result_data = _fallback_chat_response(context, user_message)
+                chat_response = result_data.get("chat_response", "")
+                
+                new_metadata = context.metadata.copy()
+                new_metadata["chat_response"] = chat_response
+                new_metadata.pop("pending_impact", None)
+                new_metadata.pop("pending_changes", None)
+                new_metadata.pop("pending_approval", None)
+                
+                if "chat_history" not in new_metadata or not new_metadata["chat_history"]:
+                    new_metadata["chat_history"] = list(chat_history)
+                new_metadata["chat_history"].append({"role": "user", "content": user_message})
+                new_metadata["chat_history"].append({
+                    "role": "assistant", 
+                    "content": chat_response,
+                    "reasoning_trace": {
+                        "sources_consulted": ["Deterministic Query Handler"],
+                        "entities_referenced": [],
+                        "traceability_chain": [],
+                        "validation_checks": ["Bypassed LLM via deterministic matching."],
+                        "confidence": 1.0
+                    }
+                })
+                
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                log_entry = {
+                    "agent": "WorkspaceChatAgent",
+                    "model": "Deterministic Query Handler",
+                    "latency_ms": duration_ms,
+                    "tokens": 0,
+                    "confidence": 1.0,
+                    "timestamp": datetime.now().isoformat(),
+                    "version": "3.0.0"
+                }
+                return context.clone(metadata=new_metadata).add_agent_log(log_entry)
+        
         # Build prompt payload with active workspace context
         user_prompt = f"""=== ACTIVE WORKSPACE SPECS ===
 Product Idea: {context.idea}
 
 Intent Context:
-{json.dumps(context.intent_context, indent=2)}
+{json.dumps(strip_metadata_for_llm(context.intent_context), indent=2)}
 
 Business Analysis:
-{json.dumps(context.business_analysis, indent=2)}
+{json.dumps(strip_metadata_for_llm(context.business_analysis), indent=2)}
 
 Product Requirements Document (PRD):
-{json.dumps(context.prd, indent=2)}
+{json.dumps(strip_metadata_for_llm(context.prd), indent=2)}
 
 Deliverables (User Stories, Roadmap, Jira Tasks):
-{json.dumps({k: v for k, v in context.deliverables.items() if k not in ["Business Analysis", "Product Requirements Document (PRD)"]}, indent=2)}
+{json.dumps(strip_metadata_for_llm({k: v for k, v in context.deliverables.items() if k not in ["Business Analysis", "Product Requirements Document (PRD)"]}), indent=2)}
 
 Traceability Graph:
 {json.dumps(context.metadata.get("entity_graph", {}), indent=2)}
@@ -503,24 +560,20 @@ def apply_workspace_refinements(
     context.metadata["entity_graph"] = engine.metadata.get("entity_graph", {})
     context.metadata["id_mappings"] = engine.metadata.get("id_mappings", {})
 
-    # Run Validation Agent conditionally: only for wide structural changes
-    num_affected = sum(1 for v in affected_flags.values() if v)
-    needs_semantic_val = (
-        affected_flags.get("business_analysis") or
-        affected_flags.get("roadmap") or
-        num_affected > 2
-    )
-    
-    if needs_semantic_val:
-        logger.info("Structural changes detected. Invoking ValidationAgent for semantic validation...")
-        validation_agent = registry.get("validation_agent")
-        try:
-            context = validation_agent.execute(context)
-            logger.info("Validation Agent successfully verified workspace integrity after refinement.")
-        except Exception as e:
-            logger.error(f"Validation Agent verification failed: {e}")
-    else:
-        logger.info("Minor edits detected. Skipping ValidationAgent semantic checks (deterministic validation only).")
+    # Run Deterministic Validator to audit workspace alignment without calling the LLM
+    logger.info("Running deterministic validation...")
+    from backend.validation.validator import DeterministicValidator
+    validator = DeterministicValidator()
+    try:
+        val_report = validator.validate(context)
+        # Auto-fix simple issues if score < 0.95
+        if val_report.get("score", 1.0) < 0.95 and val_report.get("repair_actions"):
+            context = validator.auto_fix(context, val_report["repair_actions"])
+            val_report = validator.validate(context)
+        context.metadata["validation_report"] = val_report
+        logger.info(f"Deterministic validation completed with score {val_report.get('score')}")
+    except Exception as e:
+        logger.error(f"Deterministic validation failed: {e}")
 
     # Refresh planning analysis deterministically after refinements and validation
     try:

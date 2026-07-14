@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 from backend.agent_registry import BaseAgent, registry
 from backend.workspace_context import WorkspaceContext
-from backend.llm import get_llm
+from backend.llm import get_llm, strip_metadata_for_llm
 from backend.prompts import VALIDATION_AGENT_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -36,22 +36,22 @@ class SemanticValidationAgent(BaseAgent):
         t_prompt_start = time.perf_counter()
         profiler.start_sub("Prompt Construction")
         user_message = f"""=== INTENT CONTEXT ===
-{json.dumps(context.intent_context, indent=2)}
+{json.dumps(strip_metadata_for_llm(context.intent_context), indent=2)}
  
 === BUSINESS ANALYSIS ===
-{json.dumps(context.business_analysis, indent=2)}
+{json.dumps(strip_metadata_for_llm(context.business_analysis), indent=2)}
  
 === PRODUCT REQUIREMENTS DOCUMENT (PRD) ===
-{json.dumps(context.prd, indent=2)}
+{json.dumps(strip_metadata_for_llm(context.prd), indent=2)}
  
 === USER STORIES (if generated) ===
-{json.dumps(context.deliverables.get('User Stories', {}), indent=2)}
+{json.dumps(strip_metadata_for_llm(context.deliverables.get('User Stories', {})), indent=2)}
  
 === JIRA TASKS (if generated) ===
-{json.dumps(context.deliverables.get('Jira Tasks', {}), indent=2)}
+{json.dumps(strip_metadata_for_llm(context.deliverables.get('Jira Tasks', {})), indent=2)}
  
 === ROADMAP (if generated) ===
-{json.dumps(context.deliverables.get('Product Roadmap', {}), indent=2)}
+{json.dumps(strip_metadata_for_llm(context.deliverables.get('Product Roadmap', {})), indent=2)}
 """
  
         llm = get_llm()

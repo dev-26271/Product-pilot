@@ -102,10 +102,17 @@ Return only the complete updated JSON.
 """
         
         # Step 3: Invoke LLM
+        from backend.domains import detect_domain, DOMAIN_PROMPT_ADDITIONS
+        domain = detect_domain(context.idea, intent)
+        logger.info(f"Detected project domain: '{domain}'")
+        
+        domain_instructions = DOMAIN_PROMPT_ADDITIONS.get(domain, "")
+        system_prompt = PRODUCT_MANAGER_SYSTEM_PROMPT + "\n\n=== DOMAIN-SPECIFIC PRODUCT INSTRUCTIONS ===\n" + domain_instructions
+        
         llm = get_llm()
         model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
         messages = [
-            ("system", PRODUCT_MANAGER_SYSTEM_PROMPT),
+            ("system", system_prompt),
             ("user", user_message)
         ]
         profiler.end_sub("Prompt Construction")
@@ -389,12 +396,51 @@ Return only the complete updated JSON.
             "⚙️ Functional Requirements":  func_reqs_md,
             "🔒 Non-Functional Requirements": "\n".join([f"**{k}:** {v}" for k, v in pm_json.get("Non_Functional_Requirements", {}).items()]) if isinstance(pm_json.get("Non_Functional_Requirements"), dict) else str(pm_json.get("Non_Functional_Requirements", "")),
             "✨ Core Features":             features_md,
+        }
+
+        # Dynamically append any domain-specific keys that are present in the JSON
+        domain_keys_mapping = {
+            "Materials_and_Dimensions": "🛠️ Materials & Dimensions",
+            "Manufacturing_Requirements": "🏭 Manufacturing Requirements",
+            "Packaging_and_Logistics": "📦 Packaging & Logistics",
+            "Durability_and_Safety": "🛡️ Durability & Safety",
+            "Supply_Chain_and_Cost_Targets": "⛓️ Supply Chain & Cost Targets",
+            "Certifications": "📜 Certifications & Compliance",
+            "Model_Architecture": "🧠 Model Architecture",
+            "Inference_and_Training": "⚡ Inference & Training",
+            "Safety_and_Guardrails": "🛡️ Safety & Guardrails",
+            "Hallucination_Controls": "🔍 Hallucination Controls",
+            "Buyer_and_Seller_Flow": "👥 Buyer & Seller Flow",
+            "Matching_and_Payments": "💳 Matching & Payments",
+            "Moderation_and_Trust": "🔒 Moderation & Trust",
+            "Hardware_Specs": "🔩 Hardware Specifications",
+            "Connectivity_and_Power": "🔋 Connectivity & Power",
+            "Compliance_and_Manufacturing": "📜 Compliance & Manufacturing",
+            "Clinical_and_EHR_Integration": "🏥 Clinical & EHR Integration",
+            "HIPAA_and_Patient_Safety": "🔒 HIPAA & Patient Safety",
+            "Regulatory_and_Audit": "📜 Regulatory & Audit Trail",
+            "Service_Booking_and_Matching": "📅 Service Booking & Matching",
+            "Resource_and_Billing": "💳 Resource & Billing"
+        }
+        
+        for json_key, section_title in domain_keys_mapping.items():
+            if json_key in pm_json:
+                val = pm_json[json_key]
+                if isinstance(val, list):
+                    prd_content[section_title] = "\n".join(f"- {x}" for x in val)
+                elif isinstance(val, dict):
+                    prd_content[section_title] = "\n".join(f"**{k}:** {v}" for k, v in val.items())
+                else:
+                    prd_content[section_title] = str(val)
+
+        # Append standard ending sections
+        prd_content.update({
             "💡 Assumptions":               "\n".join([f"- {a}" for a in pm_json.get("Assumptions", [])]) if isinstance(pm_json.get("Assumptions"), list) else str(pm_json.get("Assumptions", "")),
             "🚧 Constraints":               "\n".join([f"- {c}" for c in pm_json.get("Constraints", [])]) if isinstance(pm_json.get("Constraints"), list) else str(pm_json.get("Constraints", "")),
             "📊 Success Metrics":           "\n".join([f"- {m}" for m in pm_json.get("Success_Metrics", [])]) if isinstance(pm_json.get("Success_Metrics"), list) else str(pm_json.get("Success_Metrics", "")),
             "📅 High-Level Roadmap":         roadmap_md,
             "❓ Open Questions":            "\n".join([f"- {q}" for q in pm_json.get("Open_Questions", [])]) if isinstance(pm_json.get("Open_Questions"), list) else str(pm_json.get("Open_Questions", ""))
-        }
+        })
         
         if context.metadata.get("risk_analysis", True):
             prd_content["\u26a0\ufe0f Risk Factors"] = "See Risk Factors in the Executive Summary and individual Functional Requirements above."

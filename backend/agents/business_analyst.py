@@ -52,10 +52,18 @@ Original Product Idea:
 Current UTC timestamp: {datetime.now(timezone.utc).isoformat()}
 """
 
+        # Step 3: Invoke LLM
+        from backend.domains import detect_domain, DOMAIN_PROMPT_ADDITIONS
+        domain = detect_domain(context.idea, intent)
+        logger.info(f"Detected project domain: '{domain}'")
+        
+        domain_instructions = DOMAIN_PROMPT_ADDITIONS.get(domain, "")
+        system_prompt = BUSINESS_ANALYST_SYSTEM_PROMPT + "\n\n=== DOMAIN-SPECIFIC BUSINESS ANALYSIS INSTRUCTIONS ===\n" + domain_instructions
+        
         llm = get_llm()
         model_name = getattr(llm, "model_name", "llama-3.1-8b-instant")
         messages = [
-            ("system", BUSINESS_ANALYST_SYSTEM_PROMPT),
+            ("system", system_prompt),
             ("user", user_message)
         ]
         profiler.end_sub("Prompt Construction")
